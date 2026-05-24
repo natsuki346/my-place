@@ -1,17 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useWorldStore } from '@/store/useWorldStore'
-import { RoomCanvas } from '@/components/room/RoomCanvas'
-// import { WorldMap } from '@/components/room/WorldMap'
+import { RoomCanvas, getCurrentThemeColors } from '@/components/room/RoomCanvas'
+import type { ThemeColors } from '@/components/room/RoomCanvas'
 import { DoorHall } from '@/components/world/DoorHall'
 import { ChatRoom } from '@/components/room/ChatRoom'
+import { AvatarChat } from '@/components/room/AvatarChat'
 import { ProfileView } from '@/components/profile/ProfileView'
 import { BottomNav } from '@/components/nav/BottomNav'
 
 export default function RoomPage() {
   const { currentView, setView } = useWorldStore()
-  const [activeRoom, setActiveRoom] = useState<string | null>(null)
+  const [activeRoom,     setActiveRoom]     = useState<string | null>(null)
+  const [roomTab,        setRoomTab]        = useState<'room' | 'profile'>('room')
+  const [theme,          setTheme]          = useState<ThemeColors>(getCurrentThemeColors)
+  const [avatarChatOpen, setAvatarChatOpen] = useState(false)
+
+  useEffect(() => {
+    const id = setInterval(() => setTheme(getCurrentThemeColors()), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   const handleViewChange = (v: typeof currentView) => {
     if (v !== 'world') setActiveRoom(null)
@@ -34,18 +43,56 @@ export default function RoomPage() {
     >
       {/* ── Screen area ────────────────────────────────────────────── */}
       <div
-        className="overflow-hidden"
+        className="overflow-hidden flex flex-col"
         style={{ height: showingChatRoom ? '100dvh' : 'calc(100dvh - 56px)' }}
       >
         {currentView === 'room' && (
-          <RoomCanvas onSoulmateClick={() => setView('profile')} />
+          <>
+            {/* Room / Profile tab bar */}
+            <div
+              className="flex flex-shrink-0"
+              style={{
+                paddingTop: '14px',
+                background: 'transparent',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              {(['room', 'profile'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setRoomTab(tab)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 32px',
+                    fontSize: '16px',
+                    letterSpacing: '1px',
+                    color: roomTab === tab ? '#ffffff' : 'rgba(255,255,255,0.5)',
+                    borderBottom: roomTab === tab ? '3px solid #a78bfa' : '3px solid transparent',
+                    background: 'transparent',
+                    textTransform: 'capitalize',
+                    fontWeight: roomTab === tab ? 600 : 400,
+                  }}
+                >
+                  {tab === 'room' ? 'Room' : 'Profile'}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 min-h-0">
+              {roomTab === 'room' ? (
+                <RoomCanvas onAvatarClick={() => setAvatarChatOpen(true)} />
+              ) : (
+                <ProfileView theme={theme} />
+              )}
+            </div>
+          </>
         )}
 
         {currentView === 'world' && (
           <DoorHall onEnterRoom={(key) => setActiveRoom(key)} />
         )}
 
-        {currentView === 'profile' && <ProfileView />}
+        {currentView === 'profile' && <ProfileView theme={theme} />}
       </div>
 
       {/* ── Bottom navigation ──────────────────────────────────────── */}
@@ -55,16 +102,13 @@ export default function RoomPage() {
 
       {/* ── ChatRoom full-screen overlay ───────────────────────────── */}
       {showingChatRoom && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 50,
-          }}
-        >
+        <div style={{ position: 'absolute', inset: 0, zIndex: 50 }}>
           <ChatRoom roomKey={activeRoom} onBack={() => setActiveRoom(null)} />
         </div>
       )}
+
+      {/* ── AvatarChat full-screen overlay ─────────────────────────── */}
+      {avatarChatOpen && <AvatarChat onClose={() => setAvatarChatOpen(false)} />}
     </div>
   )
 }

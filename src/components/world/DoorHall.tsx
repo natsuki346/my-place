@@ -304,7 +304,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
     <div className="flex flex-col" style={{ background: timeColors.corridor, height: '100%' }}>
       {/* ── Tab bar ───────────────────────────────────────────────── */}
       <div
-        className="flex items-center gap-2 flex-shrink-0 overflow-x-auto no-scrollbar"
+        className="flex items-center justify-center gap-3 flex-shrink-0"
         style={{ padding: '8px 16px', background: timeColors.corridor }}
       >
         {TABS.map(tab => {
@@ -313,11 +313,11 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className="flex-shrink-0 transition-colors"
+              className="transition-colors whitespace-nowrap"
               style={{
                 borderRadius: '20px',
-                padding: '5px 14px',
-                fontSize: '12px',
+                padding: '6px 16px',
+                fontSize: '14px',
                 background: active ? '#1e1535' : 'transparent',
                 color:      active ? '#a78bfa' : '#555',
                 border:     active ? '1px solid #534ab7' : '1px solid transparent',

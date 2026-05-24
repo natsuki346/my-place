@@ -19,6 +19,9 @@ type WorldStore = {
   setCurrentRoom: (key: string | null) => void
   posts: Post[]
   addPost: (post: Post) => void
+  removePost: (id: string) => void
+  selectedAvatarId: number | null
+  setSelectedAvatarId: (id: number | null) => void
 }
 
 export const useWorldStore = create<WorldStore>((set) => ({
@@ -28,9 +31,9 @@ export const useWorldStore = create<WorldStore>((set) => ({
   setPlayerPos: (pos) => set({ playerPos: pos }),
   currentRoom: null,
   setCurrentRoom: (key) => set({ currentRoom: key }),
-  posts: [
-    { id: '1', text: 'なんか今日は穏やかだな', color: '#a78bfa', x: 320, y: 200 },
-    { id: '2', text: 'コーヒーが美味しかった', color: '#60a5fa', x: 180, y: 260 },
-  ],
+  posts: [],
   addPost: (post) => set((s) => ({ posts: [...s.posts, post] })),
+  removePost: (id) => set((s) => ({ posts: s.posts.filter((p) => p.id !== id) })),
+  selectedAvatarId: null,
+  setSelectedAvatarId: (id) => set({ selectedAvatarId: id }),
 }))
