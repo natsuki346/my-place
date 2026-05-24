@@ -1,0 +1,696 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type RoomType = 'my' | 'friend' | 'identity'
+type RoomMeta = { label: string; dot: string; members: string; type: RoomType }
+
+type SubRoom = {
+  id: string
+  tag: string
+  memberCount: number
+  isNew?: boolean
+}
+
+type Message = {
+  id: string
+  sender: string
+  text: string
+  timestamp: string
+  color?: string
+  likes?: number
+}
+
+type TimelinePost = {
+  id: string
+  user: string
+  color: string
+  tag: string
+  text: string
+  time: string
+  likes?: number
+  isFriend?: boolean
+}
+
+type CommentItem = {
+  id: string
+  user: string
+  color: string
+  text: string
+  time: string
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const ROOM_META: Record<string, RoomMeta> = {
+  myroom:  { label: '心の部屋',  dot: '#a78bfa', members: 'あなただけ', type: 'my' },
+  friend1: { label: 'Hana',       dot: '#34d399', members: 'friend',     type: 'friend' },
+  friend2: { label: 'Ryo',        dot: '#60a5fa', members: 'friend',     type: 'friend' },
+  id1:     { label: '#内向型',    dot: '#f472b6', members: '247',        type: 'identity' },
+  id2:     { label: '#夜型人間',  dot: '#fbbf24', members: '1.2k',       type: 'identity' },
+  id3:     { label: '#HSP',       dot: '#6ee7b7', members: '892',        type: 'identity' },
+}
+
+const DEFAULT_SUBROOMS: Record<string, SubRoom[]> = {
+  id1: [
+    { id: 'all',      tag: 'ALL',         memberCount: 247 },
+    { id: 'charging', tag: '#充電中',     memberCount: 43  },
+    { id: 'reading',  tag: '#読書',       memberCount: 28  },
+    { id: 'alone',    tag: '#ひとり時間', memberCount: 61  },
+  ],
+  id2: [
+    { id: 'all',       tag: 'ALL',           memberCount: 1200 },
+    { id: 'latenight', tag: '#深夜作業',     memberCount: 312  },
+    { id: 'morning',   tag: '#朝型羨ましい', memberCount: 89   },
+    { id: 'rhythm',    tag: '#夜型リズム',   memberCount: 156  },
+  ],
+  id3: [
+    { id: 'all',     tag: 'ALL',         memberCount: 892 },
+    { id: 'sound',   tag: '#音過敏',     memberCount: 134 },
+    { id: 'empathy', tag: '#共感疲労',   memberCount: 201 },
+    { id: 'gift',    tag: '#繊細な才能', memberCount: 87  },
+  ],
+}
+
+const INCOMING_MSGS: Record<string, string[]> = {
+  id1: ['人と話した後はしばらくひとりになりたい', '静かな空間が一番落ち着く', 'ひとりの時間＝充電時間', '大人数の飲み会が苦手すぎる'],
+  id2: ['深夜2時が一番頭が冴える', '朝の会議がつらい', '夜だけ本当の自分になれる気がする', 'サマータイムとか地獄'],
+  id3: ['映画で泣きすぎて疲れた', '他人の感情をもらいすぎる', 'ニュース見るのがしんどくなってきた', 'でも感動も人一倍感じられるのは好き'],
+}
+
+const NICKNAMES   = ['すず', 'あお', 'もも', 'かい', 'ゆい', 'なつ']
+const NICK_COLORS = ['#f472b6', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c']
+
+const MOCK_MESSAGES: Record<string, Message[]> = {
+  myroom: [
+    { id: '1', sender: 'ai', text: 'おかえり。今日はどんな一日だった？', timestamp: '今' },
+  ],
+  friend1: [
+    { id: '1', sender: 'Hana', text: 'ねえ最近どう？', timestamp: '5分前', color: '#34d399' },
+    { id: '2', sender: 'ai',   text: 'お二人の会話、温かいですね。', timestamp: '3分前' },
+  ],
+  friend2: [
+    { id: '1', sender: 'Ryo', text: '眠れない夜が続いてる。', timestamp: '10分前', color: '#60a5fa' },
+    { id: '2', sender: 'ai',  text: '少し話しませんか。', timestamp: '8分前' },
+  ],
+  id1: [
+    { id: '1', sender: 'rin',  text: '今日もひとりの時間が必要だった。',  timestamp: '12分前', color: '#f472b6' },
+    { id: '2', sender: 'kei',  text: 'わかりすぎる。',                    timestamp: '10分前', color: '#a78bfa' },
+    { id: '3', sender: 'yuu',  text: '人と話すと疲れちゃう。',            timestamp: '7分前',  color: '#60a5fa' },
+    { id: '4', sender: 'ai',   text: '内向型は一人の時間がエネルギー源ですね。', timestamp: '5分前' },
+  ],
+  id2: [
+    { id: '1', sender: 'nox',  text: '深夜の方が集中できる。',               timestamp: '20分前', color: '#fbbf24' },
+    { id: '2', sender: 'luna', text: '朝型の人間が羨ましい。',               timestamp: '15分前', color: '#f87171' },
+    { id: '3', sender: 'sin',  text: '夜は静かで好きだけど、孤独も感じる。', timestamp: '8分前',  color: '#c4b5fd' },
+    { id: '4', sender: 'ai',   text: '夜型の感性、大切にしてください。',      timestamp: '5分前' },
+  ],
+  id3: [
+    { id: '1', sender: 'mio',   text: '音に敏感すぎて疲れた。',      timestamp: '18分前', color: '#34d399' },
+    { id: '2', sender: 'haru',  text: '共感。カフェとか無理すぎる。', timestamp: '15分前', color: '#60a5fa' },
+    { id: '3', sender: 'tsuki', text: '感情の波が激しい日があって。', timestamp: '10分前', color: '#a78bfa' },
+    { id: '4', sender: 'ai',    text: 'HSPの感受性は、世界を豊かに感じる力でもあります。', timestamp: '7分前' },
+  ],
+}
+
+const AI_REPLIES: Record<string, string[]> = {
+  myroom:  ['そうか、話してくれてありがとう。', 'もう少し聞かせてほしいな。', 'あなたの気持ち、ちゃんと受け取ったよ。'],
+  friend1: ['Hanaも聞いてるよ、きっと。', 'お二人の会話、大切にしてくださいね。', '温かい場所ですね、ここ。'],
+  friend2: ['Ryoの言葉、重みがある。', 'あなたの話、ちゃんと届いてる。', '眠れない夜も、一人じゃないよ。'],
+  id1:     ['内向型の繊細さ、大切にしてください。', 'ひとりの時間、必要なことあります。', 'みんなも同じ気持ちだよ。'],
+  id2:     ['夜型の感性って、独特の美しさがあります。', '深夜の静けさ、共鳴しますね。', '夜の孤独も、あなたの一部だから。'],
+  id3:     ['感じやすい心は、宝物だと思う。', 'HSPの感受性、守ってあげてください。', 'みんな、繊細さと生きてる。'],
+}
+
+const TIMELINE_POSTS: Record<string, TimelinePost[]> = {
+  id1: [
+    { id: '1', user: 'umi',  color: '#818cf8', tag: '#充電中',    likes: 14, text: '今日は誰とも話さない日にした。それだけで回復する。',          time: '3分前'  },
+    { id: '2', user: 'haru', color: '#f472b6', tag: '#ひとり時間', likes: 8,  text: 'カフェにひとりで来たけど隣の会話がうるさくて早退した',        time: '11分前' },
+    { id: '3', user: 'sora', color: '#60a5fa', tag: '#充電中',    likes: 22, text: '読書してたら3時間経ってた。最高の時間。',                    time: '28分前' },
+    { id: '4', user: 'kiri', color: '#34d399', tag: '#読書',      likes: 31, text: '内向型あるある：飲み会断った後の罪悪感と解放感が同時にくる', time: '1時間前' },
+  ],
+  id2: [
+    { id: '1', user: 'nox',   color: '#fbbf24', tag: '#深夜作業',     likes: 18, text: '深夜2時が一番頭が冴える。なんでこうなった。',       time: '1分前'  },
+    { id: '2', user: 'luna',  color: '#fb923c', tag: '#夜型リズム',   likes: 45, text: '朝8時の会議を設定した人間を恨んでいる',             time: '9分前'  },
+    { id: '3', user: 'tsuki', color: '#a78bfa', tag: '#深夜作業',     likes: 27, text: '夜だけ本当の自分になれる気がする。静かだから。',     time: '22分前' },
+    { id: '4', user: 'yomi',  color: '#6ee7b7', tag: '#朝型羨ましい', likes: 33, text: 'サマータイム導入とか地獄すぎる議論やめてほしい',     time: '45分前' },
+    { id: '5', user: 'Hana',  color: '#34d399', tag: '#深夜作業',     likes: 2,  text: '私も夜型だよ〜一緒に頑張ろ',   time: '2分前',  isFriend: true },
+    { id: '6', user: 'Ryo',   color: '#60a5fa', tag: '#夜型リズム',   likes: 1,  text: '深夜のテンションで送ってごめん', time: '30分前', isFriend: true },
+  ],
+  id3: [
+    { id: '1', user: 'shio', color: '#6ee7b7', tag: '#共感疲労',  likes: 11, text: '映画で泣きすぎて逆に疲れた。感受性よ。',                        time: '5分前'  },
+    { id: '2', user: 'hana', color: '#f472b6', tag: '#音過敏',    likes: 19, text: '工事の音が頭に刺さる感じする。みんなはそうじゃないの？',        time: '18分前' },
+    { id: '3', user: 'ao',   color: '#60a5fa', tag: '#繊細な才能', likes: 7,  text: '他人の感情を読みすぎてへとへとになる。でもそれが強みとも聞いた', time: '33分前' },
+    { id: '4', user: 'rin',  color: '#a78bfa', tag: '#共感疲労',  likes: 24, text: 'ニュース見るのしんどくて最近SNS断ちしてる',                    time: '1時間前' },
+  ],
+}
+
+const MOCK_COMMENTS: CommentItem[] = [
+  { id: '1', user: 'kaze', color: '#818cf8', text: 'わかりすぎる', time: '今' },
+  { id: '2', user: 'suki', color: '#f472b6', text: '毎日そう思ってる', time: '1分前' },
+]
+
+// ── ChatRoom ──────────────────────────────────────────────────────────────────
+
+type Props = { roomKey: string; onBack: () => void }
+type ChatTab = 'timeline' | 'chat'
+
+export function ChatRoom({ roomKey, onBack }: Props) {
+  const meta       = ROOM_META[roomKey] ?? { label: roomKey, dot: '#a78bfa', members: '', type: 'my' as RoomType }
+  const isIdentity = meta.type === 'identity'
+  const hasTabs    = meta.type === 'friend'
+
+  // ── Identity: subroom list state ─────────────────────────────────
+  const [activeSubRoom, setActiveSubRoom]       = useState<SubRoom | null>(null)
+  const [subRooms, setSubRooms]                 = useState<SubRoom[]>(DEFAULT_SUBROOMS[roomKey] ?? [])
+  const [isCreating, setIsCreating]             = useState(false)
+  const [newRoomName, setNewRoomName]           = useState('')
+  const [activeListTab, setActiveListTab]       = useState<'rooms' | 'timeline'>('rooms')
+
+  // ── Identity: timeline state ─────────────────────────────────────
+  const [timelinePosts, setTimelinePosts]               = useState<TimelinePost[]>(TIMELINE_POSTS[roomKey] ?? [])
+  const [timelineFilter, setTimelineFilter]             = useState<'all' | 'friend'>('all')
+  const [likeMap, setLikeMap]                           = useState<Record<string, boolean>>({})
+  const [selectedPost, setSelectedPost]                 = useState<TimelinePost | null>(null)
+  const [commentMap, setCommentMap]                     = useState<Record<string, CommentItem[]>>({})
+  const [commentInput, setCommentInput]                 = useState('')
+  const [isPosting, setIsPosting]                       = useState(false)
+  const [newPostText, setNewPostText]                   = useState('')
+  const [selectedPostTag, setSelectedPostTag]           = useState('')
+
+
+  // ── Chat state ───────────────────────────────────────────────────
+  const [tab, setTab]           = useState<ChatTab>(hasTabs ? 'timeline' : 'chat')
+  const [msgs, setMsgs]         = useState<Message[]>(MOCK_MESSAGES[roomKey] ?? [])
+  const [input, setInput]       = useState('')
+  const [aiTyping, setAiTyping] = useState(false)
+  const bottomRef               = useRef<HTMLDivElement>(null)
+  const incomingTimer           = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Reset chat state when entering a subroom
+  useEffect(() => {
+    if (!isIdentity || activeSubRoom === null) return
+    setInput('')
+    setAiTyping(false)
+    setMsgs(MOCK_MESSAGES[roomKey] ?? [])
+  }, [activeSubRoom, isIdentity, roomKey])
+
+  // Scroll to bottom in chat
+  useEffect(() => {
+    if (tab !== 'chat') return
+    if (isIdentity && activeSubRoom === null) return
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [msgs, tab, isIdentity, activeSubRoom])
+
+  // Random incoming messages (identity + joined + subroom open)
+  useEffect(() => {
+    if (!isIdentity || activeSubRoom === null) return
+    const pool = INCOMING_MSGS[roomKey] ?? []
+    if (!pool.length) return
+    const schedule = () => {
+      incomingTimer.current = setTimeout(() => {
+        const text  = pool[Math.floor(Math.random() * pool.length)]
+        const nick  = NICKNAMES[Math.floor(Math.random() * NICKNAMES.length)]
+        const color = NICK_COLORS[Math.floor(Math.random() * NICK_COLORS.length)]
+        setMsgs(prev => [...prev, { id: Date.now().toString(), sender: nick, text, timestamp: 'たった今', color }])
+        schedule()
+      }, 8000 + Math.random() * 7000)
+    }
+    schedule()
+    return () => { if (incomingTimer.current) clearTimeout(incomingTimer.current) }
+  }, [isIdentity, roomKey, activeSubRoom])
+
+  // ── Handlers ─────────────────────────────────────────────────────
+
+  const send = () => {
+    const text = input.trim()
+    if (!text) return
+    setMsgs(prev => [...prev, { id: Date.now().toString(), sender: 'me', text, timestamp: 'たった今' }])
+    setInput('')
+    const total = 3000 + Math.random() * 3000
+    setTimeout(() => setAiTyping(true), Math.max(0, total - 1500))
+    setTimeout(() => {
+      const replies = AI_REPLIES[roomKey] ?? ['...']
+      setAiTyping(false)
+      setMsgs(prev => [...prev, { id: (Date.now() + 1).toString(), sender: 'ai', text: replies[Math.floor(Math.random() * replies.length)], timestamp: 'たった今' }])
+    }, total)
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') { e.preventDefault(); send() }
+  }
+
+  const handleCreateRoom = () => {
+    const name = newRoomName.trim()
+    if (!name) return
+    setSubRooms(prev => [...prev, { id: Date.now().toString(), tag: '#' + name, memberCount: 1, isNew: true }])
+    setNewRoomName('')
+    setIsCreating(false)
+  }
+
+  const handlePost = () => {
+    const text = newPostText.trim()
+    if (!text) return
+    const tag = selectedPostTag || subRooms.find(s => s.id !== 'all')?.tag || '#全般'
+    setTimelinePosts(prev => [{
+      id: Date.now().toString(),
+      user: 'あなた',
+      color: '#a78bfa',
+      tag,
+      text,
+      time: '今',
+      likes: 0,
+      isFriend: false,
+    }, ...prev])
+    setNewPostText('')
+    setSelectedPostTag('')
+    setIsPosting(false)
+  }
+
+  const handleAddComment = () => {
+    if (!selectedPost || !commentInput.trim()) return
+    setCommentMap(prev => ({
+      ...prev,
+      [selectedPost.id]: [...(prev[selectedPost.id] ?? MOCK_COMMENTS), {
+        id: Date.now().toString(),
+        user: 'あなた',
+        color: '#a78bfa',
+        text: commentInput.trim(),
+        time: '今',
+      }],
+    }))
+    setCommentInput('')
+  }
+
+  const toggleLike = (postId: string) => {
+    setLikeMap(prev => ({ ...prev, [postId]: !prev[postId] }))
+  }
+
+  // ── Identity: subroom list view ──────────────────────────────────
+  if (isIdentity && activeSubRoom === null) {
+    const postTagOptions = subRooms.filter(s => s.id !== 'all').map(s => s.tag)
+    const filteredPosts  = timelineFilter === 'all'
+      ? timelinePosts
+      : timelinePosts.filter(p => p.isFriend)
+
+    return (
+      <div
+        className="flex flex-col"
+        style={{ height: '100dvh', background: '#07060f', fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
+      >
+        {/* Header */}
+        <header className="flex items-center gap-3 px-4 flex-shrink-0" style={{ height: '60px', background: '#0d0a1a', borderBottom: '1px solid #1a1530' }}>
+          <button onClick={onBack} style={{ color: '#a78bfa', fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
+          <div className="flex-1 min-w-0 flex flex-col items-center gap-1">
+            <p style={{ color: '#e8e0ff', fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
+            <span style={{ background: '#1e1535', border: '1px solid #534ab7', color: '#a78bfa', fontSize: '10px', padding: '2px 8px', borderRadius: '10px' }}>
+              全員参加中のルーム
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span style={{ color: meta.dot, fontSize: '10px', animation: 'blink 1.4s ease-in-out infinite' }}>●</span>
+            <span style={{ color: '#888', fontSize: '11px' }}>{meta.members}人がいる</span>
+          </div>
+        </header>
+
+        {/* ルーム / タイムライン tabs */}
+        <div className="flex flex-shrink-0" style={{ height: '36px', background: '#0a0812', borderBottom: '1px solid #1a1530' }}>
+          {(['rooms', 'timeline'] as const).map(t => (
+            <button key={t} onClick={() => setActiveListTab(t)} className="flex-1 flex items-center justify-center"
+              style={{ fontSize: '12px', color: activeListTab === t ? '#a78bfa' : '#444', borderBottom: activeListTab === t ? '2px solid #7f77dd' : '2px solid transparent' }}>
+              {t === 'rooms' ? 'ルーム' : 'タイムライン'}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
+          {activeListTab === 'rooms' ? (
+            subRooms.map(sub =>
+              sub.id === 'all' ? (
+                <button key={sub.id} onClick={() => setActiveSubRoom(sub)} className="w-full flex items-center gap-3 text-left"
+                  style={{ padding: '16px', background: '#1e1535', borderBottom: '2px solid #534ab7' }}>
+                  <span style={{ fontSize: '18px' }}>💬</span>
+                  <span style={{ flex: 1, color: '#e8e0ff', fontSize: '15px', fontWeight: 600 }}>ALL</span>
+                  <span style={{ color: '#a78bfa', fontSize: '12px' }}>{sub.memberCount.toLocaleString()}人</span>
+                </button>
+              ) : (
+                <button key={sub.id} onClick={() => setActiveSubRoom(sub)} className="w-full flex items-center gap-3 text-left"
+                  style={{ padding: '14px 16px', borderBottom: '1px solid #1a1530' }}>
+                  <span style={{ color: '#534ab7', fontSize: '16px', fontWeight: 700 }}>#</span>
+                  <span style={{ flex: 1, color: '#c4b5fd', fontSize: '14px' }}>
+                    {sub.tag.startsWith('#') ? sub.tag.slice(1) : sub.tag}
+                    {sub.isNew && <span style={{ marginLeft: '6px', color: '#a78bfa', fontSize: '10px' }}>NEW</span>}
+                  </span>
+                  <span style={{ color: '#555', fontSize: '11px' }}>{sub.memberCount.toLocaleString()}人</span>
+                </button>
+              )
+            )
+          ) : (
+            <>
+              {/* ALL / フレンド toggle switch */}
+              <div style={{ display: 'flex', background: '#1a1528', borderRadius: '20px', padding: '2px', margin: '8px 16px' }}>
+                <button onClick={() => setTimelineFilter('all')}
+                  style={{ flex: 1, textAlign: 'center', fontSize: '13px', padding: '6px 24px', borderRadius: '18px', background: timelineFilter === 'all' ? '#534ab7' : 'transparent', color: timelineFilter === 'all' ? '#fff' : '#555' }}>
+                  ALL
+                </button>
+                <button onClick={() => setTimelineFilter('friend')}
+                  style={{ flex: 1, textAlign: 'center', fontSize: '13px', padding: '6px 24px', borderRadius: '18px', background: timelineFilter === 'friend' ? '#534ab7' : 'transparent', color: timelineFilter === 'friend' ? '#fff' : '#555' }}>
+                  フレンド
+                </button>
+              </div>
+
+              {/* Post cards */}
+              {filteredPosts.map(post => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  liked={likeMap[post.id] ?? false}
+                  likeCount={(post.likes ?? 0) + (likeMap[post.id] ? 1 : 0)}
+                  onToggleLike={() => toggleLike(post.id)}
+                  commentCount={(commentMap[post.id] ?? MOCK_COMMENTS).length}
+                  onComment={() => { setSelectedPost(post); setCommentInput('') }}
+                />
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* FAB: ルームタブ → 作成モーダル / タイムラインタブ → 投稿モーダル */}
+        {activeListTab === 'rooms' && (
+          <button
+            onClick={() => setIsCreating(true)}
+            className="flex items-center justify-center"
+            style={{ position: 'absolute', bottom: '80px', right: '16px', width: '52px', height: '52px', borderRadius: '50%', background: '#534ab7', color: '#fff', fontSize: '22px', boxShadow: '0 4px 14px rgba(83,74,183,0.45)', zIndex: 10 }}
+          >
+            💬
+          </button>
+        )}
+        {activeListTab === 'timeline' && (
+          <button
+            onClick={() => { setIsPosting(true); setSelectedPostTag(subRooms.find(s => s.id !== 'all')?.tag ?? '') }}
+            className="flex items-center justify-center"
+            style={{ position: 'absolute', bottom: '80px', right: '16px', width: '48px', height: '48px', borderRadius: '50%', background: '#534ab7', color: '#fff', fontSize: '20px', boxShadow: '0 4px 12px rgba(83,74,183,0.4)', zIndex: 10 }}
+          >
+            ＋
+          </button>
+        )}
+
+        {/* Room creation modal */}
+        {isCreating && (
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#0d0a1a', borderTop: '2px solid #534ab7', padding: '20px 16px', zIndex: 100 }}>
+            <p style={{ color: '#e8e0ff', fontSize: '15px', fontWeight: 600, marginBottom: '16px' }}>新しいルームを作成</p>
+            <div className="flex items-center" style={{ background: '#1a1528', borderRadius: '8px', padding: '10px 12px' }}>
+              <span style={{ color: '#534ab7', fontSize: '18px', fontWeight: 700, marginRight: '4px' }}>#</span>
+              <input value={newRoomName} onChange={e => setNewRoomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateRoom() }} placeholder="ルーム名を入力" autoFocus
+                style={{ flex: 1, background: 'transparent', border: 'none', color: '#e8e0ff', fontSize: '16px', outline: 'none' }} />
+            </div>
+            <button onClick={handleCreateRoom} disabled={!newRoomName.trim()} style={{ width: '100%', padding: '12px', background: '#534ab7', color: '#fff', borderRadius: '8px', marginTop: '16px', fontSize: '14px', fontWeight: 600, opacity: newRoomName.trim() ? 1 : 0.5 }}>
+              作成する
+            </button>
+            <button onClick={() => { setIsCreating(false); setNewRoomName('') }} style={{ width: '100%', padding: '10px', color: '#555', fontSize: '13px', marginTop: '8px' }}>
+              キャンセル
+            </button>
+          </div>
+        )}
+
+        {/* Post modal */}
+        {isPosting && (
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#0d0a1a', borderTop: '2px solid #534ab7', padding: '20px 16px', zIndex: 100 }}>
+            <p style={{ color: '#e8e0ff', fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>今の気持ちをつぶやく</p>
+            <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} rows={3} placeholder="今どんな気持ち？"
+              style={{ width: '100%', background: '#1a1528', border: '1px solid #2a2040', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#e8e0ff', outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
+            <div className="flex gap-2 flex-wrap" style={{ marginTop: '12px' }}>
+              {postTagOptions.map(tag => (
+                <button key={tag} onClick={() => setSelectedPostTag(tag)}
+                  style={{ flexShrink: 0, padding: '4px 12px', borderRadius: '20px', fontSize: '11px', border: selectedPostTag === tag ? '1px solid #534ab7' : '1px solid #2a2040', background: selectedPostTag === tag ? '#1e1535' : 'transparent', color: selectedPostTag === tag ? '#a78bfa' : '#555' }}>
+                  {tag}
+                </button>
+              ))}
+            </div>
+            <button onClick={handlePost} disabled={!newPostText.trim()} style={{ width: '100%', padding: '12px', background: '#534ab7', color: '#fff', borderRadius: '8px', marginTop: '16px', fontSize: '14px', fontWeight: 600, opacity: newPostText.trim() ? 1 : 0.5 }}>
+              投稿する
+            </button>
+            <button onClick={() => { setIsPosting(false); setNewPostText('') }} style={{ width: '100%', padding: '10px', color: '#555', fontSize: '13px', marginTop: '8px' }}>
+              キャンセル
+            </button>
+          </div>
+        )}
+
+        {/* Comment sheet */}
+        {selectedPost && (
+          <>
+            <div onClick={() => { setSelectedPost(null); setCommentInput('') }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200 }} />
+            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '390px', height: '60dvh', background: '#0d0a1a', borderTop: '2px solid #1a1530', borderRadius: '16px 16px 0 0', zIndex: 201, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
+                <div style={{ width: '32px', height: '3px', background: '#333', borderRadius: '2px' }} />
+              </div>
+              <div className="flex items-start gap-2" style={{ padding: '8px 16px', borderBottom: '1px solid #1a1530' }}>
+                <div className="flex items-center justify-center flex-shrink-0" style={{ width: '24px', height: '24px', borderRadius: '50%', background: selectedPost.color, fontSize: '9px', fontWeight: 700, color: '#fff', marginTop: '2px' }}>
+                  {selectedPost.user[0]}
+                </div>
+                <div className="min-w-0">
+                  <p style={{ color: '#888', fontSize: '11px', marginBottom: '2px' }}>{selectedPost.user}</p>
+                  <p style={{ color: '#c4b5fd', fontSize: '12px', lineHeight: '1.4', overflow: 'hidden', maxHeight: '2.8em' }}>{selectedPost.text}</p>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {(commentMap[selectedPost.id] ?? MOCK_COMMENTS).map(c => (
+                  <div key={c.id} className="flex items-start gap-2" style={{ padding: '10px 16px' }}>
+                    <div className="flex items-center justify-center flex-shrink-0" style={{ width: '24px', height: '24px', borderRadius: '50%', background: c.color, fontSize: '9px', fontWeight: 700, color: '#fff' }}>
+                      {c.user[0]}
+                    </div>
+                    <div>
+                      <p style={{ color: '#555', fontSize: '10px', marginBottom: '2px' }}>{c.user} · {c.time}</p>
+                      <p style={{ color: '#c4b5fd', fontSize: '12px', lineHeight: '1.4' }}>{c.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 px-3 flex-shrink-0" style={{ height: '48px', borderTop: '1px solid #1a1530' }}>
+                <input value={commentInput} onChange={e => setCommentInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddComment() } }} placeholder="コメントを入力..."
+                  style={{ flex: 1, background: '#1a1528', border: '1px solid #2a2040', borderRadius: '20px', padding: '6px 12px', fontSize: '13px', color: '#e8e0ff', outline: 'none' }} />
+                <button onClick={handleAddComment} disabled={!commentInput.trim()} className="flex items-center justify-center flex-shrink-0 transition-opacity disabled:opacity-35"
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#534ab7', color: '#fff', fontSize: '14px' }}>
+                  ↑
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  // ── Chat view (friend / my / identity subroom) ───────────────────
+  const showBottom = isIdentity || tab === 'chat'
+
+  return (
+    <div
+      className="flex flex-col"
+      style={{ height: '100dvh', background: '#07060f', fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
+    >
+      {/* Header */}
+      {isIdentity && activeSubRoom !== null ? (
+        <header className="flex items-center gap-3 px-4 flex-shrink-0" style={{ height: '44px', background: '#0d0a1a', borderBottom: '1px solid #1a1530' }}>
+          <button onClick={() => setActiveSubRoom(null)} style={{ color: '#a78bfa', fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
+          <div className="flex-1 min-w-0 text-center">
+            <p style={{ color: '#e8e0ff', fontSize: '14px', fontWeight: 600 }}>{activeSubRoom.tag}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span style={{ color: '#555', fontSize: '11px' }}>{activeSubRoom.memberCount.toLocaleString()}人</span>
+          </div>
+        </header>
+      ) : (
+        <header className="flex items-center gap-3 px-4 flex-shrink-0" style={{ height: '44px', background: '#0d0a1a', borderBottom: '1px solid #1a1530' }}>
+          <button onClick={onBack} style={{ color: '#a78bfa', fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
+          <div className="flex-1 min-w-0 text-center">
+            <p style={{ color: '#e8e0ff', fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: meta.dot }} />
+            <span style={{ color: '#555', fontSize: '11px' }}>{meta.members}</span>
+          </div>
+        </header>
+      )}
+
+
+      {/* Friend tabs */}
+      {hasTabs && (
+        <div className="flex flex-shrink-0" style={{ height: '36px', background: '#0a0812', borderBottom: '1px solid #1a1530' }}>
+          {(['timeline', 'chat'] as ChatTab[]).map(t => (
+            <button key={t} onClick={() => setTab(t)} className="flex-1 flex items-center justify-center"
+              style={{ fontSize: '12px', color: tab === t ? '#e8e0ff' : '#555', borderBottom: tab === t ? `2px solid ${meta.dot}` : '2px solid transparent', fontWeight: tab === t ? 600 : 400, transition: 'color 0.15s' }}>
+              {t === 'timeline' ? 'タイムライン' : 'チャット'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
+        {tab === 'timeline'
+          ? <FriendTimelineView msgs={msgs} dot={meta.dot} />
+          : <ChatView msgs={msgs} aiTyping={aiTyping} bottomRef={bottomRef} />
+        }
+      </div>
+
+      {/* Bottom: input */}
+      {showBottom && (
+        <div className="flex-shrink-0 flex items-center gap-2 px-3" style={{ height: '56px', background: '#0d0a1a', borderTop: '1px solid #1a1530' }}>
+          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown} placeholder="メッセージを入力..."
+            style={{ flex: 1, background: '#1a1528', border: '1px solid #2a2040', borderRadius: '20px', padding: '8px 14px', fontSize: '13px', color: '#e8e0ff', outline: 'none' }} />
+          <button onClick={send} disabled={!input.trim()} className="flex items-center justify-center flex-shrink-0 transition-opacity disabled:opacity-35"
+            style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#534ab7', color: '#fff', fontSize: '16px' }}>
+            ↑
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Timeline post card ────────────────────────────────────────────────────────
+
+type PostCardProps = {
+  post: TimelinePost
+  liked: boolean
+  likeCount: number
+  onToggleLike: () => void
+  commentCount: number
+  onComment: () => void
+}
+
+function PostCard({ post, liked, likeCount, onToggleLike, commentCount, onComment }: PostCardProps) {
+  return (
+    <div style={{ padding: '14px 16px', borderBottom: '1px solid #1a1530', background: '#07060f', borderLeft: post.isFriend ? `2px solid ${post.color}` : undefined }}>
+      <div className="flex items-center" style={{ gap: '8px' }}>
+        <div className="flex items-center justify-center flex-shrink-0" style={{ width: '28px', height: '28px', borderRadius: '50%', background: post.color, fontSize: '11px', fontWeight: 700, color: '#fff' }}>
+          {post.user[0]}
+        </div>
+        <span style={{ color: '#888', fontSize: '12px' }}>{post.user}</span>
+        <span style={{ background: '#1e1535', color: '#a78bfa', fontSize: '10px', padding: '2px 8px', borderRadius: '10px', border: '1px solid #2a1f4a', flexShrink: 0 }}>{post.tag}</span>
+        <span style={{ color: '#444', fontSize: '10px', marginLeft: 'auto', flexShrink: 0 }}>{post.time}</span>
+      </div>
+      <p style={{ color: '#c4b5fd', fontSize: '13px', lineHeight: '1.6', marginTop: '8px', wordBreak: 'break-word' }}>{post.text}</p>
+      <div className="flex" style={{ justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+        <button onClick={onToggleLike} className="flex items-center gap-1">
+          <span style={{ fontSize: '13px' }}>{liked ? '❤️' : '🤍'}</span>
+          <span style={{ color: liked ? '#f472b6' : '#555', fontSize: '12px' }}>{likeCount}</span>
+        </button>
+        <button onClick={onComment} className="flex items-center gap-1">
+          <span style={{ fontSize: '13px' }}>💬</span>
+          <span style={{ color: '#555', fontSize: '12px' }}>{commentCount}</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Friend timeline view ──────────────────────────────────────────────────────
+
+function FriendTimelineView({ msgs, dot }: { msgs: Message[]; dot: string }) {
+  const visible = msgs.filter(m => m.sender !== 'ai')
+  return (
+    <div className="px-4 py-3 space-y-3">
+      {visible.map(msg => <FriendTimelineCard key={msg.id} msg={msg} dot={dot} />)}
+    </div>
+  )
+}
+
+function FriendTimelineCard({ msg, dot }: { msg: Message; dot: string }) {
+  const [liked, setLiked] = useState(false)
+  const [count, setCount] = useState(msg.likes ?? 0)
+  const isMe = msg.sender === 'me'
+
+  return (
+    <div style={{ background: '#0d0a1a', border: `1px solid ${isMe ? '#2a2048' : '#1a1530'}`, borderRadius: '12px', padding: '12px 14px' }}>
+      <div className="flex items-center gap-2 mb-2">
+        <Avatar label={isMe ? 'me' : msg.sender.charAt(0).toUpperCase()} color={isMe ? '#534ab7' : (msg.color ?? dot)} />
+        <span style={{ color: isMe ? '#a78bfa' : (msg.color ?? '#888'), fontSize: '12px', fontWeight: 600 }}>{isMe ? 'あなた' : msg.sender}</span>
+        <span style={{ color: '#333', fontSize: '10px', marginLeft: 'auto' }}>{msg.timestamp}</span>
+      </div>
+      <p style={{ color: '#c4b5fd', fontSize: '13px', lineHeight: '1.6', wordBreak: 'break-word' }}>{msg.text}</p>
+      <div className="flex items-center gap-1 mt-3">
+        <button onClick={() => { setLiked(p => !p); setCount(p => p + (liked ? -1 : 1)) }} style={{ color: liked ? '#f472b6' : '#333', fontSize: '14px', lineHeight: 1 }}>
+          {liked ? '♥' : '♡'}
+        </button>
+        <span style={{ color: '#444', fontSize: '11px' }}>{count}</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Chat view ─────────────────────────────────────────────────────────────────
+
+function ChatView({ msgs, aiTyping, bottomRef }: { msgs: Message[]; aiTyping: boolean; bottomRef: React.RefObject<HTMLDivElement | null> }) {
+  return (
+    <div className="px-4 py-4 space-y-4">
+      {msgs.map(msg => <Bubble key={msg.id} msg={msg} />)}
+      {aiTyping && <TypingIndicator />}
+      <div ref={bottomRef} />
+    </div>
+  )
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex gap-2 items-start">
+      <Avatar label="AI" color="#534ab7" />
+      <div style={{ background: '#1e1535', borderLeft: '2px solid #a78bfa', borderRadius: '12px 12px 12px 2px', padding: '10px 14px' }}>
+        <div className="flex gap-1">
+          {[0, 1, 2].map(i => (
+            <span key={i} style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: '#a78bfa', animation: `bounce 1s ease-in-out ${i * 0.15}s infinite` }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Bubble ────────────────────────────────────────────────────────────────────
+
+function Bubble({ msg }: { msg: Message }) {
+  const isMe = msg.sender === 'me'
+  const isAI = msg.sender === 'ai'
+
+  if (isMe) return (
+    <div className="flex justify-end">
+      <div>
+        <div style={{ background: '#534ab7', color: '#fff', borderRadius: '12px 12px 2px 12px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', wordBreak: 'break-word' }}>{msg.text}</div>
+        <p style={{ color: '#444', fontSize: '10px', textAlign: 'right', marginTop: '2px' }}>{msg.timestamp}</p>
+      </div>
+    </div>
+  )
+
+  if (isAI) return (
+    <div className="flex gap-2 items-start">
+      <Avatar label="AI" color="#534ab7" />
+      <div>
+        <div style={{ background: '#1e1535', borderLeft: '2px solid #a78bfa', color: '#c4b5fd', borderRadius: '12px 12px 12px 2px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', fontStyle: 'italic', wordBreak: 'break-word' }}>{msg.text}</div>
+        <p style={{ color: '#444', fontSize: '10px', marginTop: '2px' }}>{msg.timestamp}</p>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="flex gap-2 items-start">
+      <Avatar label={msg.sender.charAt(0).toUpperCase()} color={msg.color ?? '#534ab7'} />
+      <div>
+        <p style={{ color: '#555', fontSize: '10px', marginBottom: '2px' }}>{msg.sender}</p>
+        <div style={{ background: '#1e1a2e', color: '#c4b5fd', borderRadius: '12px 12px 12px 2px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', wordBreak: 'break-word' }}>{msg.text}</div>
+        <p style={{ color: '#444', fontSize: '10px', marginTop: '2px' }}>{msg.timestamp}</p>
+      </div>
+    </div>
+  )
+}
+
+function Avatar({ label, color }: { label: string; color: string }) {
+  return (
+    <div className="flex items-center justify-center flex-shrink-0" style={{ width: '24px', height: '24px', borderRadius: '50%', background: color, fontSize: '9px', fontWeight: 700, color: '#fff' }}>
+      {label}
+    </div>
+  )
+}
