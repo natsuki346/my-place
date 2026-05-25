@@ -2,12 +2,63 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Period ────────────────────────────────────────────────────────────────────
 
-type TimeColors = {
-  corridor: string
-  floor: string
-  light: string
+type Period = 'morning' | 'afternoon' | 'evening' | 'night'
+
+function getPeriod(hour: number): Period {
+  if (hour >= 22 || hour < 5) return 'night'
+  if (hour < 11) return 'morning'
+  if (hour < 17) return 'afternoon'
+  return 'evening'
+}
+
+// ── Themes ────────────────────────────────────────────────────────────────────
+
+type Theme = {
+  bg:    string   // Tailwind gradient classes (used with bg-gradient-to-b)
+  tab:   string   // active tab Tailwind bg class
+  nav:   string   // index bar Tailwind bg + border classes
+  text:  string   // found-index Tailwind text class
+  c1:    string   // canvas gradient top hex
+  c2:    string   // canvas gradient bottom hex
+  floor: string   // canvas floor hex
+  rope:  string   // canvas rope rgba
+  glow:  string   // canvas ceiling glow hex
+  dark:  boolean  // true = use light lines in canvas (night)
+  label: string   // canvas door-label hex
+  sub:   string   // canvas door-sublabel hex
+}
+
+const THEMES: Record<Period, Theme> = {
+  morning: {
+    bg: 'from-sky-100 to-blue-50', tab: 'bg-sky-500',
+    nav: 'bg-sky-50 border-sky-200', text: 'text-sky-700',
+    c1: '#e0f2fe', c2: '#eff6ff', floor: '#bae6fd',
+    rope: 'rgba(14,165,233,0.40)', glow: '#7dd3fc',
+    dark: false, label: '#1f2937', sub: '#6b7280',
+  },
+  afternoon: {
+    bg: 'from-blue-100 to-white', tab: 'bg-blue-500',
+    nav: 'bg-blue-50 border-blue-200', text: 'text-blue-700',
+    c1: '#dbeafe', c2: '#ffffff', floor: '#bfdbfe',
+    rope: 'rgba(59,130,246,0.38)', glow: '#93c5fd',
+    dark: false, label: '#1f2937', sub: '#6b7280',
+  },
+  evening: {
+    bg: 'from-orange-100 to-rose-50', tab: 'bg-orange-500',
+    nav: 'bg-orange-50 border-orange-200', text: 'text-orange-700',
+    c1: '#ffedd5', c2: '#fff1f2', floor: '#fed7aa',
+    rope: 'rgba(249,115,22,0.48)', glow: '#fb923c',
+    dark: false, label: '#1f2937', sub: '#6b7280',
+  },
+  night: {
+    bg: 'from-indigo-950 to-slate-900', tab: 'bg-purple-600',
+    nav: 'bg-indigo-950 border-indigo-800', text: 'text-indigo-200',
+    c1: '#1e1b4b', c2: '#0f172a', floor: '#312e81',
+    rope: 'rgba(129,140,248,0.50)', glow: '#818cf8',
+    dark: true, label: '#c7d2fe', sub: '#94a3b8',
+  },
 }
 
 // ── Door data ─────────────────────────────────────────────────────────────────
@@ -40,48 +91,10 @@ const DOOR_GAP = 150
 
 type Door = typeof DOORS[0]
 
-// ── Time colors ───────────────────────────────────────────────────────────────
-
-function getTimeColors(hour: number): TimeColors {
-  if (hour >= 5  && hour <= 7)  return { corridor: '#1a0f05', floor: '#2a1a0a', light: '#f97316' }
-  if (hour >= 8  && hour <= 11) return { corridor: '#0a1020', floor: '#141828', light: '#7dd3fc' }
-  if (hour >= 12 && hour <= 15) return { corridor: '#0f1a10', floor: '#182018', light: '#fbbf24' }
-  if (hour >= 16 && hour <= 19) return { corridor: '#1a0d05', floor: '#251508', light: '#fb923c' }
-  return { corridor: '#0a0812', floor: '#110e1e', light: '#818cf8' }
-}
-
-// ── Index bar helpers ─────────────────────────────────────────────────────────
-
-const JP_INDEX = ['あ','か','さ','た','な','は','ま','や','ら','わ','A','#']
-
-const ROW_MAP: Record<string, string[]> = {
-  'あ': ['あ','い','う','え','お','ア','イ','ウ','エ','オ'],
-  'か': ['か','き','く','け','こ','カ','キ','ク','ケ','コ'],
-  'さ': ['さ','し','す','せ','そ','サ','シ','ス','セ','ソ'],
-  'た': ['た','ち','つ','て','と','タ','チ','ツ','テ','ト'],
-  'な': ['な','に','ぬ','ね','の','ナ','ニ','ヌ','ネ','ノ'],
-  'は': ['は','ひ','ふ','へ','ほ','ハ','ヒ','フ','ヘ','ホ'],
-  'ま': ['ま','み','む','め','も','マ','ミ','ム','メ','モ'],
-  'や': ['や','ゆ','よ','ヤ','ユ','ヨ'],
-  'ら': ['ら','り','る','れ','ろ','ラ','リ','ル','レ','ロ'],
-  'わ': ['わ','を','ん','ワ','ヲ','ン'],
-}
-
-function getRowForIndex(idx: string, doors: Door[]): number {
-  return doors.findIndex(d => {
-    const label = d.label.replace('#', '')
-    const first = label[0]
-    if (idx === '#') return d.label.startsWith('#')
-    if (idx === 'A') return /[a-zA-Z]/.test(first)
-    return ROW_MAP[idx]?.includes(first) ?? false
-  })
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-type DoorHallProps = {
-  onEnterRoom: (key: string) => void
-}
+type DoorHallProps = { onEnterRoom: (key: string) => void }
 
 export function DoorHall({ onEnterRoom }: DoorHallProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
@@ -89,48 +102,42 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   onEnterRef.current = onEnterRoom
 
   const [activeTab, setActiveTab] = useState('all')
+  const [period,    setPeriod]    = useState<Period>('night')
 
-  // Time-based corridor colors
-  const [timeColors, setTimeColors] = useState<TimeColors>(() => getTimeColors(new Date().getHours()))
-  const timeColorsRef = useRef<TimeColors>(timeColors)
+  const theme    = THEMES[period]
+  const themeRef = useRef<Theme>(theme)
+  themeRef.current = theme
 
-  // Filtered + sorted doors — ref kept current every render so RAF loop reads latest
-  const filtered   = DOORS.filter(d => TAB_FILTER[activeTab].includes(d.key))
-  const sorted     = [...filtered].sort((a, b) => a.label.localeCompare(b.label, 'ja'))
+  // Sync period on mount + every minute
+  useEffect(() => {
+    setPeriod(getPeriod(new Date().getHours()))
+    const id = setInterval(() => setPeriod(getPeriod(new Date().getHours())), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Filtered + sorted doors
+  const sorted = [...DOORS.filter(d => TAB_FILTER[activeTab].includes(d.key))]
+    .sort((a, b) => a.label.localeCompare(b.label, 'ja'))
+
   const doorsRef   = useRef(sorted)
   doorsRef.current = sorted
 
-  // Scroll state — ref only; RAF loop reads directly every frame
+  // Scroll + drag state
   const scrollXRef       = useRef(0)
-  const isDragging      = useRef(false)
-  const dragStartX      = useRef(0)
-  const dragStartScroll = useRef(0)
-  const didDrag         = useRef(false)
+  const isDragging       = useRef(false)
+  const dragStartX       = useRef(0)
+  const dragStartScroll  = useRef(0)
+  const didDrag          = useRef(false)
 
   // Door opening animation
   const openingDoor  = useRef<string | null>(null)
   const doorProgress = useRef(0)
-
-  // 1-minute time update
-  useEffect(() => {
-    const update = () => {
-      const colors = getTimeColors(new Date().getHours())
-      timeColorsRef.current = colors
-      setTimeColors(colors)
-    }
-    const id = setInterval(update, 60_000)
-    return () => clearInterval(id)
-  }, [])
 
   const handleTabChange = (key: string) => {
     setActiveTab(key)
     scrollXRef.current   = 0
     openingDoor.current  = null
     doorProgress.current = 0
-  }
-
-  const jumpToRow = (doorIdx: number) => {
-    if (doorIdx >= 0) scrollXRef.current = doorIdx * DOOR_GAP
   }
 
   useEffect(() => {
@@ -238,7 +245,6 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
       const doors     = doorsRef.current
       const loopWidth = doors.length * DOOR_GAP
 
-      // Advance door opening — call onEnterRoom at 50% through animation
       if (openingDoor.current) {
         doorProgress.current = Math.min(1, doorProgress.current + 0.04)
         if (doorProgress.current >= 0.5) {
@@ -251,21 +257,18 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
         }
       }
 
-      // Normalise scrollX into [0, loopWidth) for drawing
       const effScroll   = ((scrollXRef.current % loopWidth) + loopWidth) % loopWidth
       const doorTopY    = (H - DOOR_H) / 2
       const doorCenterY = doorTopY + DOOR_H / 2
       const startX      = (W - doors.length * DOOR_GAP) / 2 + DOOR_GAP / 2
 
-      drawBackground(ctx, W, H, doorTopY, timeColorsRef.current)
+      drawBackground(ctx, W, H, doorTopY, themeRef.current)
 
-      // Draw 3 copies of the door list to create seamless infinite loop
       for (const offset of [-1, 0, 1]) {
         for (let i = 0; i < doors.length; i++) {
           const door = doors[i]
           const dcx  = startX + i * DOOR_GAP + offset * loopWidth - effScroll
 
-          // Skip if fully off-screen (extra margin for labels)
           if (dcx + DOOR_W / 2 + 60 < 0 || dcx - DOOR_W / 2 - 60 > W) continue
 
           const isOpening = openingDoor.current === door.key
@@ -278,7 +281,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
             ctx.translate(-dcx, -doorCenterY)
           }
 
-          renderDoor(ctx, dcx, doorTopY, door, isOpening, progress)
+          renderDoor(ctx, dcx, doorTopY, door, isOpening, progress, themeRef.current)
           ctx.restore()
         }
       }
@@ -300,12 +303,25 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
     }
   }, [])
 
+  const activeTabClass: Record<Period, string> = {
+    morning:   'bg-sky-500 text-white font-semibold',
+    afternoon: 'bg-blue-500 text-white font-semibold',
+    evening:   'bg-orange-500 text-white font-semibold',
+    night:     'bg-purple-600 text-white font-semibold',
+  }
+  const inactiveTabClass: Record<Period, string> = {
+    morning:   'text-sky-700',
+    afternoon: 'text-blue-700',
+    evening:   'text-orange-700',
+    night:     'text-indigo-300',
+  }
+
   return (
-    <div className="flex flex-col" style={{ background: timeColors.corridor, height: '100%' }}>
+    <div className={`flex flex-col bg-gradient-to-b ${theme.bg}`} style={{ height: '100%' }}>
       {/* ── Tab bar ───────────────────────────────────────────────── */}
       <div
-        className="flex items-center justify-center gap-3 flex-shrink-0"
-        style={{ padding: '8px 16px', background: timeColors.corridor }}
+        className="flex items-center justify-center gap-3 flex-shrink-0 border-b border-black/10"
+        style={{ padding: '8px 16px' }}
       >
         {TABS.map(tab => {
           const active = activeTab === tab.key
@@ -313,15 +329,10 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className="transition-colors whitespace-nowrap"
-              style={{
-                borderRadius: '20px',
-                padding: '6px 16px',
-                fontSize: '14px',
-                background: active ? '#1e1535' : 'transparent',
-                color:      active ? '#a78bfa' : '#555',
-                border:     active ? '1px solid #534ab7' : '1px solid transparent',
-              }}
+              className={`transition-colors whitespace-nowrap rounded-full ${
+                active ? activeTabClass[period] : inactiveTabClass[period]
+              }`}
+              style={{ padding: '6px 16px', fontSize: '14px' }}
             >
               {tab.label}
             </button>
@@ -329,7 +340,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
         })}
       </div>
 
-      {/* ── Canvas + floating index bar ───────────────────────────── */}
+      {/* ── Canvas + index bar ────────────────────────────────────── */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <canvas
           ref={canvasRef}
@@ -337,44 +348,6 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
           style={{ touchAction: 'none' }}
         />
 
-        {/* Index bar — floats above canvas near bottom */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '70px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            gap: '4px',
-            padding: '6px 16px',
-            background: 'rgba(10,8,18,0.85)',
-            borderRadius: '20px',
-            pointerEvents: 'auto',
-          }}
-        >
-          {JP_INDEX.map(idx => {
-            const doorIdx = getRowForIndex(idx, sorted)
-            const found   = doorIdx >= 0
-            return (
-              <button
-                key={idx}
-                onClick={() => jumpToRow(doorIdx)}
-                style={{
-                  width: '24px',
-                  height: '24px',
-                  fontSize: '11px',
-                  color: found ? '#a78bfa' : '#2a2040',
-                  textAlign: 'center',
-                  lineHeight: '24px',
-                  borderRadius: '4px',
-                  cursor: found ? 'pointer' : 'default',
-                }}
-              >
-                {idx}
-              </button>
-            )
-          })}
-        </div>
       </div>
     </div>
   )
@@ -387,17 +360,22 @@ function drawBackground(
   W: number,
   H: number,
   doorTopY: number,
-  colors: TimeColors,
+  theme: Theme,
 ) {
   const floorTopY = doorTopY + DOOR_H + 10
   const ceilingH  = Math.max(0, doorTopY - 20)
   const lightY    = Math.max(8, doorTopY - 40)
+  const lineAlpha = theme.dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'
+  const edgeAlpha = theme.dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'
 
-  ctx.fillStyle = colors.corridor
+  const bgGrd = ctx.createLinearGradient(0, 0, 0, H)
+  bgGrd.addColorStop(0, theme.c1)
+  bgGrd.addColorStop(1, theme.c2)
+  ctx.fillStyle = bgGrd
   ctx.fillRect(0, 0, W, H)
 
-  // Floor trapezoid — perspective convergence
-  ctx.fillStyle = colors.floor
+  // Floor trapezoid
+  ctx.fillStyle = theme.floor
   ctx.beginPath()
   ctx.moveTo(0, H)
   ctx.lineTo(W, H)
@@ -406,18 +384,17 @@ function drawBackground(
   ctx.closePath()
   ctx.fill()
 
-  // Floor edge highlight
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)'
+  ctx.strokeStyle = edgeAlpha
   ctx.lineWidth = 1
   ctx.beginPath()
   ctx.moveTo(W * 0.25, floorTopY)
   ctx.lineTo(W * 0.75, floorTopY)
   ctx.stroke()
 
-  // Vanishing lines toward VP at door centre height
+  // Vanishing lines
   const vpX = W / 2
   const vpY = doorTopY + DOOR_H / 2
-  ctx.strokeStyle = 'rgba(255,255,255,0.03)'
+  ctx.strokeStyle = lineAlpha
   ctx.lineWidth = 1
   for (const [lx, ly] of [
     [0, H], [W, H],
@@ -427,21 +404,21 @@ function drawBackground(
     ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(vpX, vpY); ctx.stroke()
   }
 
-  // Ceiling lights — radial gradient with time-based color
+  // Ceiling glow dots
   for (let i = 0; i < 4; i++) {
     const lx  = W * (i + 0.5) / 4
-    const grd = ctx.createRadialGradient(lx, lightY, 0, lx, lightY, 60)
-    grd.addColorStop(0,    hexToRgba(colors.light, 0.42))
-    grd.addColorStop(0.35, hexToRgba(colors.light, 0.12))
-    grd.addColorStop(1,    hexToRgba(colors.light, 0))
+    const grd = ctx.createRadialGradient(lx, lightY, 0, lx, lightY, 40)
+    grd.addColorStop(0,   hexToRgba(theme.glow, 0.25))
+    grd.addColorStop(0.5, hexToRgba(theme.glow, 0.07))
+    grd.addColorStop(1,   hexToRgba(theme.glow, 0))
     ctx.beginPath()
-    ctx.arc(lx, lightY, 60, 0, Math.PI * 2)
+    ctx.arc(lx, lightY, 40, 0, Math.PI * 2)
     ctx.fillStyle = grd
     ctx.fill()
 
     ctx.beginPath()
-    ctx.arc(lx, lightY, 3, 0, Math.PI * 2)
-    ctx.fillStyle = colors.light
+    ctx.arc(lx, lightY, 2.5, 0, Math.PI * 2)
+    ctx.fillStyle = theme.glow
     ctx.fill()
   }
 }
@@ -455,13 +432,14 @@ function renderDoor(
   door: Door,
   isOpening: boolean,
   progress: number,
+  theme: Theme,
 ) {
   const x = cx - DOOR_W / 2
   const w = DOOR_W
   const h = DOOR_H
 
   // Suspension wire
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)'
+  ctx.strokeStyle = theme.rope
   ctx.lineWidth = 1
   ctx.beginPath()
   ctx.moveTo(cx, topY)
@@ -476,7 +454,7 @@ function renderDoor(
   ctx.fillStyle = '#8B5E3C'
   ctx.fillRect(x, topY, w, h)
 
-  // Wood grain — 4 vertical lines clipped to door body
+  // Wood grain
   ctx.save()
   ctx.beginPath()
   ctx.rect(x, topY, w, h)
@@ -492,14 +470,14 @@ function renderDoor(
   }
   ctx.restore()
 
-  // Inner panels — 2 recessed rectangles
+  // Inner panels
   const px = x + 10
   const pw = w - 20
   ctx.fillStyle = 'rgba(0,0,0,0.15)'
   ctx.fillRect(px, topY + 30, pw, Math.floor(h * 0.30))
   ctx.fillRect(px, topY + 30 + Math.floor(h * 0.30) + 8, pw, Math.floor(h * 0.38))
 
-  // Name plate — top center of door
+  // Name plate
   ctx.font = 'bold 9px system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -516,7 +494,7 @@ function renderDoor(
   ctx.fillStyle = '#3d2000'
   ctx.fillText(door.label, cx, plateY + plateH / 2)
 
-  // Doorknob — right side center, r=6
+  // Doorknob
   ctx.beginPath()
   ctx.arc(x + w - 14, topY + h * 0.55, 6, 0, Math.PI * 2)
   ctx.fillStyle = '#D4A853'
@@ -525,7 +503,7 @@ function renderDoor(
   ctx.lineWidth = 0.8
   ctx.stroke()
 
-  // Opening white flash
+  // Opening flash
   if (isOpening && progress > 0) {
     ctx.fillStyle = `rgba(255,255,255,${Math.min(0.92, progress * 0.85)})`
     ctx.fillRect(x, topY, w, h)
@@ -535,12 +513,11 @@ function renderDoor(
   ctx.font = 'bold 10px system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
-  ctx.fillStyle = '#c4a882'
+  ctx.fillStyle = theme.label
   ctx.fillText(door.label, cx, topY + h + 8)
 
-  // Sublabel
   ctx.font = '8px system-ui, sans-serif'
-  ctx.fillStyle = '#666'
+  ctx.fillStyle = theme.sub
   ctx.fillText(door.sublabel, cx, topY + h + 22)
 }
 

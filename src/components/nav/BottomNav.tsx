@@ -1,11 +1,19 @@
 'use client'
 
+import { useState, useEffect } from 'react'
+import { Home, Map, Compass } from 'lucide-react'
 import type { AppView } from '@/store/useWorldStore'
 
-const TABS: { key: AppView; icon: string; label: string }[] = [
-  { key: 'room',    icon: '🏠', label: 'MyRoom'  },
-  { key: 'world',   icon: '🗺', label: 'World'   },
-  { key: 'profile', icon: '👤', label: 'Profile' },
+type Period = 'morning' | 'afternoon' | 'evening' | 'night'
+
+function getPeriod(h: number): Period {
+  return h >= 5 && h < 11 ? 'morning' : h >= 11 && h < 17 ? 'afternoon' : h >= 17 && h < 22 ? 'evening' : 'night'
+}
+
+const TABS: { key: AppView; Icon: React.FC<{ size?: number; strokeWidth?: number }>; label: string }[] = [
+  { key: 'room',    Icon: Home,    label: 'MyRoom' },
+  { key: 'world',   Icon: Map,     label: 'World'  },
+  { key: 'explore', Icon: Compass, label: 'Explore' },
 ]
 
 type Props = {
@@ -14,37 +22,52 @@ type Props = {
 }
 
 export function BottomNav({ current, onChange }: Props) {
+  const [period, setPeriod] = useState<Period>('night')
+
+  useEffect(() => {
+    setPeriod(getPeriod(new Date().getHours()))
+    const id = setInterval(() => setPeriod(getPeriod(new Date().getHours())), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const activeColor = {
+    morning:   'text-sky-500',
+    afternoon: 'text-blue-500',
+    evening:   'text-orange-500',
+    night:     'text-purple-500',
+  }[period]
+
+  const activeIndicator = {
+    morning:   'bg-sky-400',
+    afternoon: 'bg-blue-400',
+    evening:   'bg-orange-400',
+    night:     'bg-purple-500',
+  }[period]
+
   return (
     <nav
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] flex z-50"
-      style={{ height: '56px', background: '#07060f', borderTop: '1px solid #1a1530' }}
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] flex z-50 bg-white border-t border-gray-200"
+      style={{ height: '56px' }}
     >
-      {TABS.map((tab) => {
-        const active = current === tab.key
+      {TABS.map(({ key, Icon, label }) => {
+        const active = current === key
         return (
           <button
-            key={tab.key}
-            onClick={() => onChange(tab.key)}
-            className="flex-1 flex flex-col items-center justify-center gap-[2px] pt-2 relative transition-colors"
-            style={{ color: active ? '#a78bfa' : '#444' }}
+            key={key}
+            onClick={() => onChange(key)}
+            className={`flex-1 flex flex-col items-center justify-center gap-[2px] pt-2 relative transition-colors ${
+              active ? activeColor : 'text-gray-400'
+            }`}
           >
-            {/* Active indicator */}
             {active && (
               <div
-                className="absolute top-0 rounded-b-sm"
-                style={{
-                  left: '20%', right: '20%',
-                  height: '2px',
-                  background: '#7f77dd',
-                }}
+                className={`absolute top-0 rounded-b-sm ${activeIndicator}`}
+                style={{ left: '20%', right: '20%', height: '2px' }}
               />
             )}
-            <span className="text-[18px] leading-none">{tab.icon}</span>
-            <span
-              className="text-[10px]"
-              style={{ fontWeight: active ? 600 : 400 }}
-            >
-              {tab.label}
+            <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+            <span className="text-[10px]" style={{ fontWeight: active ? 600 : 400 }}>
+              {label}
             </span>
           </button>
         )

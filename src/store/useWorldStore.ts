@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type AppView = 'room' | 'world' | 'profile'
+export type AppView = 'room' | 'world' | 'explore'
 
 type Post = {
   id: string

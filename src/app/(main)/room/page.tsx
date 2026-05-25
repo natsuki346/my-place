@@ -8,7 +8,13 @@ import { DoorHall } from '@/components/world/DoorHall'
 import { ChatRoom } from '@/components/room/ChatRoom'
 import { AvatarChat } from '@/components/room/AvatarChat'
 import { ProfileView } from '@/components/profile/ProfileView'
+import { ExploreView } from '@/components/explore/ExploreView'
 import { BottomNav } from '@/components/nav/BottomNav'
+
+type Period = 'morning' | 'afternoon' | 'evening' | 'night'
+function getPeriod(h: number): Period {
+  return h >= 5 && h < 11 ? 'morning' : h >= 11 && h < 17 ? 'afternoon' : h >= 17 && h < 22 ? 'evening' : 'night'
+}
 
 export default function RoomPage() {
   const { currentView, setView } = useWorldStore()
@@ -16,9 +22,14 @@ export default function RoomPage() {
   const [roomTab,        setRoomTab]        = useState<'room' | 'profile'>('room')
   const [theme,          setTheme]          = useState<ThemeColors>(getCurrentThemeColors)
   const [avatarChatOpen, setAvatarChatOpen] = useState(false)
+  const [period,         setPeriod]         = useState<Period>('night')
 
   useEffect(() => {
-    const id = setInterval(() => setTheme(getCurrentThemeColors()), 60_000)
+    setPeriod(getPeriod(new Date().getHours()))
+    const id = setInterval(() => {
+      setTheme(getCurrentThemeColors())
+      setPeriod(getPeriod(new Date().getHours()))
+    }, 60_000)
     return () => clearInterval(id)
   }, [])
 
@@ -49,34 +60,42 @@ export default function RoomPage() {
         {currentView === 'room' && (
           <>
             {/* Room / Profile tab bar */}
-            <div
-              className="flex flex-shrink-0"
-              style={{
-                paddingTop: '14px',
-                background: 'transparent',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
-              }}
-            >
-              {(['room', 'profile'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setRoomTab(tab)}
-                  style={{
-                    flex: 1,
-                    padding: '8px 32px',
-                    fontSize: '16px',
-                    letterSpacing: '1px',
-                    color: roomTab === tab ? '#ffffff' : 'rgba(255,255,255,0.5)',
-                    borderBottom: roomTab === tab ? '3px solid #a78bfa' : '3px solid transparent',
-                    background: 'transparent',
-                    textTransform: 'capitalize',
-                    fontWeight: roomTab === tab ? 600 : 400,
-                  }}
-                >
-                  {tab === 'room' ? 'Room' : 'Profile'}
-                </button>
-              ))}
-            </div>
+            {(() => {
+              const activeBorder = {
+                morning:   'border-sky-400',
+                afternoon: 'border-blue-400',
+                evening:   'border-orange-400',
+                night:     'border-purple-500',
+              }[period]
+              return (
+                <div className="flex flex-shrink-0 bg-white">
+                  {(['room', 'profile'] as const).map((tab) => {
+                    const active = roomTab === tab
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => setRoomTab(tab)}
+                        className={`flex-1 transition-colors ${
+                          active
+                            ? `text-gray-900 font-semibold border-b-2 ${activeBorder}`
+                            : 'text-gray-400 border-b-2 border-transparent'
+                        }`}
+                        style={{
+                          paddingTop: '14px',
+                          paddingBottom: '8px',
+                          fontSize: '16px',
+                          letterSpacing: '1px',
+                          textTransform: 'capitalize',
+                          background: 'white',
+                        }}
+                      >
+                        {tab === 'room' ? 'Room' : 'Profile'}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })()}
 
             <div className="flex-1 min-h-0">
               {roomTab === 'room' ? (
@@ -92,7 +111,7 @@ export default function RoomPage() {
           <DoorHall onEnterRoom={(key) => setActiveRoom(key)} />
         )}
 
-        {currentView === 'profile' && <ProfileView theme={theme} />}
+        {currentView === 'explore' && <ExploreView />}
       </div>
 
       {/* ── Bottom navigation ──────────────────────────────────────── */}

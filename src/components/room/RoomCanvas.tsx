@@ -63,7 +63,7 @@ const EMOTION_COLORS = [
 // ── Time themes ───────────────────────────────────────────────────────────────
 
 const TIME_THEMES = {
-  dawn:    { hours:[5,6,7],                  bg1:'#fde8d0',bg2:'#f9c784',wall1:'#f0d5b0',wall2:'#e8c898',floor1:'#f5e8d5',floor2:'#f0e0c8',light:'#fde68a',accent:'#f97316',label:'朝焼け' },
+  dawn:    { hours:[5,6,7],                  bg1:'#d8eeff',bg2:'#b8ddf5',wall1:'#c8e8f8',wall2:'#b0d8f0',floor1:'#dff0fb',floor2:'#c8e4f5',light:'#90d0f0',accent:'#38a8e0',label:'清々しい朝' },
   morning: { hours:[8,9,10,11],              bg1:'#e8f4fd',bg2:'#bfdbfe',wall1:'#dbeafe',wall2:'#bfdbfe',floor1:'#eff6ff',floor2:'#e0f2fe',light:'#7dd3fc',accent:'#0ea5e9',label:'清々しい朝' },
   noon:    { hours:[12,13,14,15],            bg1:'#fefce8',bg2:'#fde68a',wall1:'#fef9c3',wall2:'#fde68a',floor1:'#fffbeb',floor2:'#fef3c7',light:'#fbbf24',accent:'#f59e0b',label:'明るい昼' },
   evening: { hours:[16,17,18,19],            bg1:'#fef3c7',bg2:'#fdba74',wall1:'#fed7aa',wall2:'#fdba74',floor1:'#fff7ed',floor2:'#fde8d0',light:'#fb923c',accent:'#ea580c',label:'夕暮れ' },
@@ -126,7 +126,6 @@ export function RoomCanvas({ onAvatarClick }: Props) {
   const addPost    = useWorldStore((s) => s.addPost)
   const removePost = useWorldStore((s) => s.removePost)
 
-  const [editMode,      setEditMode]      = useState(false)
   const [modalOpen,     setModalOpen]     = useState(false)
   const [postText,      setPostText]      = useState('')
   const [selectedColor, setSelectedColor] = useState(EMOTION_COLORS[0].value)
@@ -302,47 +301,6 @@ export function RoomCanvas({ onAvatarClick }: Props) {
       strokeLine(ctx, BK, FL)
       strokeLine(ctx, BK, FR)
 
-      // Bookshelf (left wall)
-      const bsX = FL.x + (BK.x - FL.x) * 0.18
-      const bsY = FL.y + (BK.y - FL.y) * 0.18 - 88
-      const bsW = Math.max(62, W * 0.15)
-      const bsH = bsW * 1.28
-      ctx.fillStyle = '#2a1f4a'
-      ctx.fillRect(bsX, bsY, bsW, bsH)
-      ctx.strokeStyle = '#6d28d9'
-      ctx.lineWidth = 1
-      ctx.strokeRect(bsX, bsY, bsW, bsH)
-      ctx.strokeStyle = 'rgba(139,92,246,0.22)'
-      ctx.lineWidth = 0.7
-      for (let i = 1; i <= 2; i++) {
-        const ly = bsY + bsH * (i / 3)
-        ctx.beginPath(); ctx.moveTo(bsX, ly); ctx.lineTo(bsX + bsW, ly); ctx.stroke()
-      }
-      const bookColors = ['#f87171', '#60a5fa', '#34d399', '#fbbf24', '#a78bfa']
-      for (let sh = 0; sh < 3; sh++) {
-        let bx = bsX + 3
-        const by = bsY + bsH * (sh / 3) + 4
-        for (let b = 0; b < 3; b++) {
-          ctx.fillStyle = bookColors[(sh * 3 + b) % bookColors.length]
-          const bw2 = 6 + (b % 2) * 3
-          ctx.fillRect(bx, by, bw2, bsH / 3 - 8)
-          bx += bw2 + 2
-        }
-      }
-
-      // Plant (right wall)
-      const plX = BK.x + (FR.x - BK.x) * 0.22
-      const plY = BK.y + (FR.y - BK.y) * 0.22
-      ctx.fillStyle = '#3a2a18'
-      ctx.beginPath()
-      ctx.moveTo(plX - 13, plY); ctx.lineTo(plX + 13, plY)
-      ctx.lineTo(plX + 10, plY + 20); ctx.lineTo(plX - 10, plY + 20)
-      ctx.closePath(); ctx.fill()
-      ctx.fillStyle = '#1e3a18'
-      for (const [ox, oy, r2] of [[-10, -25, 15], [10, -25, 15], [0, -35, 18]] as [number,number,number][]) {
-        ctx.beginPath(); ctx.arc(plX + ox, plY + oy, r2, 0, Math.PI * 2); ctx.fill()
-      }
-
       // AI avatar (floor center-right, sin-wave bob)
       const sx = Math.min(cx + floorHW * 0.42, W - 42)
       const sy = floorY + floorHD * 0.25 + Math.sin(t * 0.0014) * 5
@@ -362,7 +320,17 @@ export function RoomCanvas({ onAvatarClick }: Props) {
     }
   }, [])
 
-  const themeLabel = HOUR_THEME[currentHour].label
+  const fabPeriod =
+    currentHour >= 5  && currentHour < 11 ? 'morning' :
+    currentHour >= 11 && currentHour < 17 ? 'afternoon' :
+    currentHour >= 17 && currentHour < 22 ? 'evening' : 'night'
+
+  const fabBg = {
+    morning:   'bg-pink-400',
+    afternoon: 'bg-pink-500',
+    evening:   'bg-rose-500',
+    night:     'bg-pink-600',
+  }[fabPeriod]
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return (
@@ -370,27 +338,6 @@ export function RoomCanvas({ onAvatarClick }: Props) {
       className="relative flex flex-col h-full select-none"
       style={{ background: '#0a0812', fontFamily: 'system-ui, sans-serif' }}
     >
-      {/* Header */}
-      <header
-        className="flex items-center justify-between px-4 flex-shrink-0"
-        style={{ height: '44px', background: '#0d0a1a' }}
-      >
-        <span style={{ color: '#a78bfa', fontSize: '13px', letterSpacing: '2px', fontWeight: 500 }}>
-          my room
-        </span>
-        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px' }}>
-          {themeLabel}
-        </span>
-        <button
-          onClick={() => setEditMode((v) => !v)}
-          className="transition-opacity"
-          style={{ fontSize: '18px', opacity: editMode ? 1 : 0.4 }}
-          title="家具アレンジ"
-        >
-          🪄
-        </button>
-      </header>
-
       {/* Canvas with pinch/pan wrapper */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
         <style>{`
@@ -427,7 +374,7 @@ export function RoomCanvas({ onAvatarClick }: Props) {
       {/* FAB — post button */}
       <button
         onClick={() => setModalOpen(true)}
-        className="flex items-center justify-center transition-transform active:scale-95"
+        className={`flex items-center justify-center transition-transform active:scale-95 ${fabBg}`}
         style={{
           position: 'absolute',
           bottom: '16px',
@@ -435,13 +382,12 @@ export function RoomCanvas({ onAvatarClick }: Props) {
           width: '52px',
           height: '52px',
           borderRadius: '50%',
-          background: '#534ab7',
           color: '#fff',
-          boxShadow: '0 4px 20px rgba(83,74,183,0.55)',
+          boxShadow: '0 4px 20px rgba(236,72,153,0.45)',
           zIndex: 10,
         }}
       >
-        <Heart size={22} strokeWidth={2.5} />
+        <Heart size={22} strokeWidth={2} fill="currentColor" />
       </button>
 
       {/* ── Post modal (centered fade-in) ─────────────────────────── */}

@@ -43,7 +43,7 @@ const EV_CLOUDS = [
 
 const GRADIENTS: Record<Period, string> = {
   night:     'linear-gradient(to bottom, #06000f 0%, #0d0a2e 55%, #1a0e3a 100%)',
-  morning:   'linear-gradient(to bottom, #ff8c3a 0%, #ffbf80 40%, #aee0f0 100%)',
+  morning:   'linear-gradient(to bottom, #e0f4ff 0%, #b8e0f7 50%, #87ceeb 100%)',
   afternoon: 'linear-gradient(to bottom, #5ab8f0 0%, #87ceeb 55%, #b0ddf5 100%)',
   evening:   'linear-gradient(to bottom, #c82800 0%, #ff6a00 30%, #9d2e1e 65%, #2d1b69 100%)',
 }
@@ -140,17 +140,19 @@ export function SkyLayer({ hour }: { hour: number }) {
         {/* ── Morning ────────────────────────────────────────────────── */}
         {period === 'morning' && (
           <>
+            {/* Pale yellow sun — small, upper left */}
             <div
               style={{
                 position: 'absolute',
-                left: '10%', bottom: '30%',
-                width: '54px', height: '54px',
+                left: '12%', top: '14%',
+                width: '38px', height: '38px',
                 borderRadius: '50%',
-                background: 'radial-gradient(circle, #fff5b0, #ffe040, #ff9900)',
-                boxShadow: '0 0 28px 10px rgba(255,200,0,0.55), 0 0 70px 25px rgba(255,150,0,0.25)',
+                background: 'radial-gradient(circle, #ffffff, #ffe566, #ffd633)',
+                boxShadow: '0 0 18px 6px rgba(255,230,100,0.45), 0 0 50px 18px rgba(200,230,255,0.20)',
               }}
             />
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,140,60,0.14)' }} />
+            {/* Soft light-blue morning haze */}
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(180,220,255,0.10)' }} />
           </>
         )}
 
