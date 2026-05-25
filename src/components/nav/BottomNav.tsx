@@ -31,16 +31,16 @@ export function BottomNav({ current, onChange }: Props) {
   }, [])
 
   const activeColor = {
-    morning:   'text-sky-500',
-    afternoon: 'text-blue-500',
-    evening:   'text-orange-500',
-    night:     'text-purple-500',
+    morning:   'text-sky-600',
+    afternoon: 'text-blue-600',
+    evening:   'text-orange-600',
+    night:     'text-purple-600',
   }[period]
 
   const activeIndicator = {
-    morning:   'bg-sky-400',
-    afternoon: 'bg-blue-400',
-    evening:   'bg-orange-400',
+    morning:   'bg-sky-500',
+    afternoon: 'bg-blue-500',
+    evening:   'bg-orange-500',
     night:     'bg-purple-500',
   }[period]
 
@@ -60,10 +60,7 @@ export function BottomNav({ current, onChange }: Props) {
             }`}
           >
             {active && (
-              <div
-                className={`absolute top-0 rounded-b-sm ${activeIndicator}`}
-                style={{ left: '20%', right: '20%', height: '2px' }}
-              />
+              <div className={`absolute top-0 left-0 right-0 h-0.5 ${activeIndicator}`} />
             )}
             <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
             <span className="text-[10px]" style={{ fontWeight: active ? 600 : 400 }}>

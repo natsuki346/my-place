@@ -16,47 +16,46 @@ function getPeriod(hour: number): Period {
 // ── Themes ────────────────────────────────────────────────────────────────────
 
 type Theme = {
-  bg:    string   // Tailwind gradient classes (used with bg-gradient-to-b)
-  tab:   string   // active tab Tailwind bg class
-  nav:   string   // index bar Tailwind bg + border classes
-  text:  string   // found-index Tailwind text class
-  c1:    string   // canvas gradient top hex
-  c2:    string   // canvas gradient bottom hex
-  floor: string   // canvas floor hex
-  rope:  string   // canvas rope rgba
-  glow:  string   // canvas ceiling glow hex
-  dark:  boolean  // true = use light lines in canvas (night)
-  label: string   // canvas door-label hex
-  sub:   string   // canvas door-sublabel hex
+  bg:    string
+  tab:   string
+  nav:   string
+  text:  string
+  c1:    string
+  c2:    string
+  rope:  string
+  glow:  string
+  dark:  boolean
+  label: string
+  sub:   string
 }
 
 const THEMES: Record<Period, Theme> = {
   morning: {
     bg: 'from-sky-100 to-blue-50', tab: 'bg-sky-500',
     nav: 'bg-sky-50 border-sky-200', text: 'text-sky-700',
-    c1: '#e0f2fe', c2: '#eff6ff', floor: '#bae6fd',
+    c1: '#e0f2fe', c2: '#eff6ff',
     rope: 'rgba(14,165,233,0.40)', glow: '#7dd3fc',
     dark: false, label: '#1f2937', sub: '#6b7280',
   },
   afternoon: {
     bg: 'from-blue-100 to-white', tab: 'bg-blue-500',
     nav: 'bg-blue-50 border-blue-200', text: 'text-blue-700',
-    c1: '#dbeafe', c2: '#ffffff', floor: '#bfdbfe',
+    c1: '#dbeafe', c2: '#ffffff',
     rope: 'rgba(59,130,246,0.38)', glow: '#93c5fd',
     dark: false, label: '#1f2937', sub: '#6b7280',
   },
   evening: {
     bg: 'from-orange-100 to-rose-50', tab: 'bg-orange-500',
     nav: 'bg-orange-50 border-orange-200', text: 'text-orange-700',
-    c1: '#ffedd5', c2: '#fff1f2', floor: '#fed7aa',
+    c1: '#ffedd5', c2: '#fff1f2',
     rope: 'rgba(249,115,22,0.48)', glow: '#fb923c',
     dark: false, label: '#1f2937', sub: '#6b7280',
   },
   night: {
-    bg: 'from-indigo-950 to-slate-900', tab: 'bg-purple-600',
+    bg: 'from-[#0a0a1f] via-[#0d0d2e] to-[#0a0a1f]', tab: 'bg-purple-600',
     nav: 'bg-indigo-950 border-indigo-800', text: 'text-indigo-200',
-    c1: '#1e1b4b', c2: '#0f172a', floor: '#312e81',
-    rope: 'rgba(129,140,248,0.50)', glow: '#818cf8',
+    c1: '#0a0a1f', c2: '#0d0d2e',
+    rope: 'rgba(255,255,255,0.20)', glow: '#818cf8',
     dark: true, label: '#c7d2fe', sub: '#94a3b8',
   },
 }
@@ -101,8 +100,13 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   const onEnterRef   = useRef(onEnterRoom)
   onEnterRef.current = onEnterRoom
 
-  const [activeTab, setActiveTab] = useState('all')
-  const [period,    setPeriod]    = useState<Period>('night')
+  const [activeTab,     setActiveTab]     = useState('all')
+  const [period,        setPeriod]        = useState<Period>('night')
+  const [favorites,     setFavorites]     = useState<string[]>([])
+  const [showFavorites, setShowFavorites] = useState(false)
+
+  const favoritesRef = useRef<string[]>([])
+  favoritesRef.current = favorites
 
   const theme    = THEMES[period]
   const themeRef = useRef<Theme>(theme)
@@ -115,12 +119,10 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
     return () => clearInterval(id)
   }, [])
 
-  // Filtered + sorted doors
-  const sorted = [...DOORS.filter(d => TAB_FILTER[activeTab].includes(d.key))]
-    .sort((a, b) => a.label.localeCompare(b.label, 'ja'))
+  const filteredDoors = DOORS.filter(d => TAB_FILTER[activeTab].includes(d.key))
 
-  const doorsRef   = useRef(sorted)
-  doorsRef.current = sorted
+  const doorsRef   = useRef<Door[]>(filteredDoors)
+  doorsRef.current = filteredDoors
 
   // Scroll + drag state
   const scrollXRef       = useRef(0)
@@ -167,12 +169,24 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
 
       for (const offset of [-1, 0, 1]) {
         for (let i = 0; i < doors.length; i++) {
-          const dcx = startX + i * DOOR_GAP + offset * loopWidth - effScroll
+          const door   = doors[i]
+          const dcx    = startX + i * DOOR_GAP + offset * loopWidth - effScroll
+          const starCx = dcx + DOOR_W / 2 - 14
+          const starCy = doorTopY + 14
+
+          // Star icon tap — toggle favorite
+          if (Math.hypot(canvasX - starCx, canvasY - starCy) < 16) {
+            const key = door.key
+            setFavorites(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+            return
+          }
+
+          // Door body tap — open
           if (
             canvasX >= dcx - DOOR_W / 2 && canvasX <= dcx + DOOR_W / 2 &&
             canvasY >= doorTopY && canvasY <= doorTopY + DOOR_H
           ) {
-            openingDoor.current  = doors[i].key
+            openingDoor.current  = door.key
             doorProgress.current = 0
             return
           }
@@ -281,7 +295,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
             ctx.translate(-dcx, -doorCenterY)
           }
 
-          renderDoor(ctx, dcx, doorTopY, door, isOpening, progress, themeRef.current)
+          renderDoor(ctx, dcx, doorTopY, door, isOpening, progress, themeRef.current, favoritesRef.current.includes(door.key))
           ctx.restore()
         }
       }
@@ -303,52 +317,112 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
     }
   }, [])
 
-  const activeTabClass: Record<Period, string> = {
-    morning:   'bg-sky-500 text-white font-semibold',
-    afternoon: 'bg-blue-500 text-white font-semibold',
-    evening:   'bg-orange-500 text-white font-semibold',
-    night:     'bg-purple-600 text-white font-semibold',
-  }
-  const inactiveTabClass: Record<Period, string> = {
-    morning:   'text-sky-700',
-    afternoon: 'text-blue-700',
-    evening:   'text-orange-700',
-    night:     'text-indigo-300',
+  const tabActiveBg: Record<Period, string> = {
+    morning:   'bg-sky-500',
+    afternoon: 'bg-blue-500',
+    evening:   'bg-orange-500',
+    night:     'bg-purple-600',
   }
 
   return (
     <div className={`flex flex-col bg-gradient-to-b ${theme.bg}`} style={{ height: '100%' }}>
       {/* ── Tab bar ───────────────────────────────────────────────── */}
-      <div
-        className="flex items-center justify-center gap-3 flex-shrink-0 border-b border-black/10"
-        style={{ padding: '8px 16px' }}
-      >
+      <div className="flex items-center justify-center gap-2 px-4 py-3 flex-shrink-0">
         {TABS.map(tab => {
           const active = activeTab === tab.key
           return (
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className={`transition-colors whitespace-nowrap rounded-full ${
-                active ? activeTabClass[period] : inactiveTabClass[period]
+              className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                active ? `${tabActiveBg[period]} text-white` : 'text-white/60'
               }`}
-              style={{ padding: '6px 16px', fontSize: '14px' }}
             >
               {tab.label}
             </button>
           )
         })}
+        <button
+          onClick={() => setShowFavorites(true)}
+          className={`px-3 py-1.5 rounded-full text-base transition-colors ${
+            favorites.length > 0 ? `${tabActiveBg[period]} text-white` : 'text-white/60'
+          }`}
+        >
+          {favorites.length > 0 ? '⭐' : '☆'}
+        </button>
       </div>
 
-      {/* ── Canvas + index bar ────────────────────────────────────── */}
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      {/* ── Canvas ───────────────────────────────────────────────── */}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         <canvas
           ref={canvasRef}
           className="block w-full h-full cursor-pointer"
           style={{ touchAction: 'none' }}
         />
-
       </div>
+
+      {/* ── Favorites bottom sheet ───────────────────────────────── */}
+      {showFavorites && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 100 }}
+            onClick={() => setShowFavorites(false)}
+          />
+          <div style={{
+            position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+            width: '100%', maxWidth: '390px', maxHeight: '60dvh',
+            background: theme.dark ? '#1e1b4b' : '#ffffff',
+            borderRadius: '16px 16px 0 0',
+            zIndex: 101, display: 'flex', flexDirection: 'column',
+          }}>
+            {/* Handle */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+              <div style={{ width: '32px', height: '3px', background: theme.dark ? 'rgba(255,255,255,0.18)' : '#e5e7eb', borderRadius: '2px' }} />
+            </div>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 16px 12px' }}>
+              <span style={{ fontSize: '15px', fontWeight: 600, color: theme.dark ? '#c7d2fe' : '#1f2937' }}>⭐ お気に入り</span>
+              <button onClick={() => setShowFavorites(false)} style={{ color: theme.dark ? '#94a3b8' : '#6b7280', fontSize: '22px', lineHeight: 1 }}>×</button>
+            </div>
+            {/* List */}
+            <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '24px' }}>
+              {favorites.length === 0 ? (
+                <p style={{ textAlign: 'center', color: theme.dark ? '#94a3b8' : '#9ca3af', fontSize: '13px', padding: '32px 0' }}>
+                  まだお気に入りがありません
+                </p>
+              ) : (
+                favorites.map(key => {
+                  const door = DOORS.find(d => d.key === key)
+                  if (!door) return null
+                  const typeLabel = key.startsWith('id') ? 'アイデンティティ' : key === 'myroom' ? 'マイルーム' : 'フレンド'
+                  const typeBg    = theme.dark ? 'rgba(129,140,248,0.18)' : '#eff6ff'
+                  const typeColor = theme.dark ? '#818cf8' : '#3b82f6'
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => { setShowFavorites(false); onEnterRef.current(key) }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: '12px',
+                        padding: '12px 16px', textAlign: 'left',
+                        borderBottom: `1px solid ${theme.dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6'}`,
+                      }}
+                    >
+                      <span style={{ fontSize: '22px' }}>🚪</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ color: theme.dark ? '#c7d2fe' : '#1f2937', fontSize: '14px', fontWeight: 500 }}>{door.label}</p>
+                        <p style={{ color: theme.dark ? '#94a3b8' : '#6b7280', fontSize: '11px' }}>{door.sublabel}</p>
+                      </div>
+                      <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '10px', background: typeBg, color: typeColor, flexShrink: 0 }}>
+                        {typeLabel}
+                      </span>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -362,47 +436,15 @@ function drawBackground(
   doorTopY: number,
   theme: Theme,
 ) {
-  const floorTopY = doorTopY + DOOR_H + 10
-  const ceilingH  = Math.max(0, doorTopY - 20)
-  const lightY    = Math.max(8, doorTopY - 40)
-  const lineAlpha = theme.dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'
-  const edgeAlpha = theme.dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'
+  const lightY = Math.max(8, doorTopY - 40)
 
+  // Background gradient (top → mid → top mirror)
   const bgGrd = ctx.createLinearGradient(0, 0, 0, H)
-  bgGrd.addColorStop(0, theme.c1)
-  bgGrd.addColorStop(1, theme.c2)
+  bgGrd.addColorStop(0,   theme.c1)
+  bgGrd.addColorStop(0.5, theme.c2)
+  bgGrd.addColorStop(1,   theme.c1)
   ctx.fillStyle = bgGrd
   ctx.fillRect(0, 0, W, H)
-
-  // Floor trapezoid
-  ctx.fillStyle = theme.floor
-  ctx.beginPath()
-  ctx.moveTo(0, H)
-  ctx.lineTo(W, H)
-  ctx.lineTo(W * 0.75, floorTopY)
-  ctx.lineTo(W * 0.25, floorTopY)
-  ctx.closePath()
-  ctx.fill()
-
-  ctx.strokeStyle = edgeAlpha
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(W * 0.25, floorTopY)
-  ctx.lineTo(W * 0.75, floorTopY)
-  ctx.stroke()
-
-  // Vanishing lines
-  const vpX = W / 2
-  const vpY = doorTopY + DOOR_H / 2
-  ctx.strokeStyle = lineAlpha
-  ctx.lineWidth = 1
-  for (const [lx, ly] of [
-    [0, H], [W, H],
-    [0, ceilingH], [W, ceilingH],
-    [W * 0.25, H], [W * 0.75, H],
-  ] as [number, number][]) {
-    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(vpX, vpY); ctx.stroke()
-  }
 
   // Ceiling glow dots
   for (let i = 0; i < 4; i++) {
@@ -433,6 +475,7 @@ function renderDoor(
   isOpening: boolean,
   progress: number,
   theme: Theme,
+  isFavorite: boolean,
 ) {
   const x = cx - DOOR_W / 2
   const w = DOOR_W
@@ -503,6 +546,13 @@ function renderDoor(
   ctx.lineWidth = 0.8
   ctx.stroke()
 
+  // Star icon (top-right corner)
+  ctx.font = '14px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = isFavorite ? '#fbbf24' : 'rgba(255,255,255,0.55)'
+  ctx.fillText(isFavorite ? '★' : '☆', cx + DOOR_W / 2 - 14, topY + 14)
+
   // Opening flash
   if (isOpening && progress > 0) {
     ctx.fillStyle = `rgba(255,255,255,${Math.min(0.92, progress * 0.85)})`
@@ -543,3 +593,4 @@ function hexToRgba(hex: string, alpha: number): string {
   const b = parseInt(hex.slice(5, 7), 16)
   return `rgba(${r},${g},${b},${alpha})`
 }
+

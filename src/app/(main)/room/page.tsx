@@ -61,11 +61,11 @@ export default function RoomPage() {
           <>
             {/* Room / Profile tab bar */}
             {(() => {
-              const activeBorder = {
-                morning:   'border-sky-400',
-                afternoon: 'border-blue-400',
-                evening:   'border-orange-400',
-                night:     'border-purple-500',
+              const activeClass = {
+                morning:   'border-sky-500 text-sky-600',
+                afternoon: 'border-blue-500 text-blue-600',
+                evening:   'border-orange-500 text-orange-600',
+                night:     'border-purple-500 text-purple-600',
               }[period]
               return (
                 <div className="flex flex-shrink-0 bg-white">
@@ -75,10 +75,8 @@ export default function RoomPage() {
                       <button
                         key={tab}
                         onClick={() => setRoomTab(tab)}
-                        className={`flex-1 transition-colors ${
-                          active
-                            ? `text-gray-900 font-semibold border-b-2 ${activeBorder}`
-                            : 'text-gray-400 border-b-2 border-transparent'
+                        className={`flex-1 transition-colors font-semibold border-b-2 ${
+                          active ? activeClass : 'text-gray-400 border-transparent'
                         }`}
                         style={{
                           paddingTop: '14px',

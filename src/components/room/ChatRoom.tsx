@@ -2,6 +2,105 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+// ── Period & Theme ────────────────────────────────────────────────────────────
+
+type Period = 'morning' | 'afternoon' | 'evening' | 'night'
+
+function getPeriod(hour: number): Period {
+  if (hour >= 22 || hour < 5) return 'night'
+  if (hour < 11) return 'morning'
+  if (hour < 17) return 'afternoon'
+  return 'evening'
+}
+
+type PT = {
+  bg: string
+  headerBg: string
+  border: string
+  accent: string
+  tabBorder: string
+  tabActive: string
+  tabInactive: string
+  cardBg: string
+  cardBorder: string
+  text: string
+  subText: string
+  dimText: string
+  inputBg: string
+  inputBorder: string
+  inputText: string
+  tagBg: string
+  tagBorder: string
+  tagText: string
+  badgeBg: string
+  badgeBorder: string
+  badgeText: string
+  bubbleMe: string
+  bubbleMeText: string
+  bubbleAi: string
+  bubbleAiBorder: string
+  bubbleAiText: string
+  bubbleOther: string
+  bubbleOtherText: string
+  likeActive: string
+  isNight: boolean
+}
+
+const THEME: Record<Period, PT> = {
+  morning: {
+    bg: '#f0f9ff', headerBg: '#ffffff', border: '#f3f4f6',
+    accent: '#0284c7', tabBorder: '#0ea5e9', tabActive: '#0284c7', tabInactive: '#9ca3af',
+    cardBg: '#ffffff', cardBorder: '#f3f4f6',
+    text: '#111827', subText: '#6b7280', dimText: '#9ca3af',
+    inputBg: '#f8fafc', inputBorder: '#bae6fd', inputText: '#111827',
+    tagBg: '#e0f2fe', tagBorder: '#7dd3fc', tagText: '#0284c7',
+    badgeBg: '#e0f2fe', badgeBorder: '#7dd3fc', badgeText: '#0284c7',
+    bubbleMe: '#0ea5e9', bubbleMeText: '#ffffff',
+    bubbleAi: '#f1f5f9', bubbleAiBorder: '#0ea5e9', bubbleAiText: '#1e293b',
+    bubbleOther: '#f8fafc', bubbleOtherText: '#1e293b',
+    likeActive: '#0284c7', isNight: false,
+  },
+  afternoon: {
+    bg: '#eff6ff', headerBg: '#ffffff', border: '#f3f4f6',
+    accent: '#2563eb', tabBorder: '#3b82f6', tabActive: '#2563eb', tabInactive: '#9ca3af',
+    cardBg: '#ffffff', cardBorder: '#f3f4f6',
+    text: '#111827', subText: '#6b7280', dimText: '#9ca3af',
+    inputBg: '#f8fafc', inputBorder: '#bfdbfe', inputText: '#111827',
+    tagBg: '#dbeafe', tagBorder: '#93c5fd', tagText: '#2563eb',
+    badgeBg: '#dbeafe', badgeBorder: '#93c5fd', badgeText: '#2563eb',
+    bubbleMe: '#3b82f6', bubbleMeText: '#ffffff',
+    bubbleAi: '#f1f5f9', bubbleAiBorder: '#3b82f6', bubbleAiText: '#1e293b',
+    bubbleOther: '#f8fafc', bubbleOtherText: '#1e293b',
+    likeActive: '#2563eb', isNight: false,
+  },
+  evening: {
+    bg: '#fff7ed', headerBg: '#ffffff', border: '#f3f4f6',
+    accent: '#ea580c', tabBorder: '#f97316', tabActive: '#ea580c', tabInactive: '#9ca3af',
+    cardBg: '#ffffff', cardBorder: '#f3f4f6',
+    text: '#111827', subText: '#6b7280', dimText: '#9ca3af',
+    inputBg: '#fff7ed', inputBorder: '#fed7aa', inputText: '#111827',
+    tagBg: '#ffedd5', tagBorder: '#fdba74', tagText: '#ea580c',
+    badgeBg: '#ffedd5', badgeBorder: '#fdba74', badgeText: '#ea580c',
+    bubbleMe: '#f97316', bubbleMeText: '#ffffff',
+    bubbleAi: '#fef3c7', bubbleAiBorder: '#f97316', bubbleAiText: '#1e293b',
+    bubbleOther: '#fff7ed', bubbleOtherText: '#1e293b',
+    likeActive: '#ea580c', isNight: false,
+  },
+  night: {
+    bg: '#07060f', headerBg: '#0d0a1a', border: '#1a1530',
+    accent: '#a78bfa', tabBorder: '#7f77dd', tabActive: '#a78bfa', tabInactive: '#444',
+    cardBg: '#07060f', cardBorder: '#1a1530',
+    text: '#e8e0ff', subText: '#888', dimText: '#444',
+    inputBg: '#1a1528', inputBorder: '#2a2040', inputText: '#e8e0ff',
+    tagBg: '#1e1535', tagBorder: '#2a1f4a', tagText: '#a78bfa',
+    badgeBg: '#1e1535', badgeBorder: '#534ab7', badgeText: '#a78bfa',
+    bubbleMe: '#534ab7', bubbleMeText: '#ffffff',
+    bubbleAi: '#1e1535', bubbleAiBorder: '#a78bfa', bubbleAiText: '#c4b5fd',
+    bubbleOther: '#1e1a2e', bubbleOtherText: '#c4b5fd',
+    likeActive: '#f472b6', isNight: true,
+  },
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type RoomType = 'my' | 'friend' | 'identity'
@@ -162,6 +261,13 @@ export function ChatRoom({ roomKey, onBack }: Props) {
   const isIdentity = meta.type === 'identity'
   const hasTabs    = meta.type === 'friend'
 
+  // Period + theme
+  const [period, setPeriod] = useState<Period>('night')
+  useEffect(() => {
+    setPeriod(getPeriod(new Date().getHours()))
+  }, [])
+  const t = THEME[period]
+
   // ── Identity: subroom list state ─────────────────────────────────
   const [activeSubRoom, setActiveSubRoom]       = useState<SubRoom | null>(null)
   const [subRooms, setSubRooms]                 = useState<SubRoom[]>(DEFAULT_SUBROOMS[roomKey] ?? [])
@@ -170,16 +276,15 @@ export function ChatRoom({ roomKey, onBack }: Props) {
   const [activeListTab, setActiveListTab]       = useState<'rooms' | 'timeline'>('rooms')
 
   // ── Identity: timeline state ─────────────────────────────────────
-  const [timelinePosts, setTimelinePosts]               = useState<TimelinePost[]>(TIMELINE_POSTS[roomKey] ?? [])
-  const [timelineFilter, setTimelineFilter]             = useState<'all' | 'friend'>('all')
-  const [likeMap, setLikeMap]                           = useState<Record<string, boolean>>({})
-  const [selectedPost, setSelectedPost]                 = useState<TimelinePost | null>(null)
-  const [commentMap, setCommentMap]                     = useState<Record<string, CommentItem[]>>({})
-  const [commentInput, setCommentInput]                 = useState('')
-  const [isPosting, setIsPosting]                       = useState(false)
-  const [newPostText, setNewPostText]                   = useState('')
-  const [selectedPostTag, setSelectedPostTag]           = useState('')
-
+  const [timelinePosts, setTimelinePosts]     = useState<TimelinePost[]>(TIMELINE_POSTS[roomKey] ?? [])
+  const [timelineFilter, setTimelineFilter]   = useState<'all' | 'friend'>('all')
+  const [likeMap, setLikeMap]                 = useState<Record<string, boolean>>({})
+  const [selectedPost, setSelectedPost]       = useState<TimelinePost | null>(null)
+  const [commentMap, setCommentMap]           = useState<Record<string, CommentItem[]>>({})
+  const [commentInput, setCommentInput]       = useState('')
+  const [isPosting, setIsPosting]             = useState(false)
+  const [newPostText, setNewPostText]         = useState('')
+  const [selectedPostTag, setSelectedPostTag] = useState('')
 
   // ── Chat state ───────────────────────────────────────────────────
   const [tab, setTab]           = useState<ChatTab>(hasTabs ? 'timeline' : 'chat')
@@ -189,7 +294,6 @@ export function ChatRoom({ roomKey, onBack }: Props) {
   const bottomRef               = useRef<HTMLDivElement>(null)
   const incomingTimer           = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Reset chat state when entering a subroom
   useEffect(() => {
     if (!isIdentity || activeSubRoom === null) return
     setInput('')
@@ -197,14 +301,12 @@ export function ChatRoom({ roomKey, onBack }: Props) {
     setMsgs(MOCK_MESSAGES[roomKey] ?? [])
   }, [activeSubRoom, isIdentity, roomKey])
 
-  // Scroll to bottom in chat
   useEffect(() => {
     if (tab !== 'chat') return
     if (isIdentity && activeSubRoom === null) return
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [msgs, tab, isIdentity, activeSubRoom])
 
-  // Random incoming messages (identity + joined + subroom open)
   useEffect(() => {
     if (!isIdentity || activeSubRoom === null) return
     const pool = INCOMING_MSGS[roomKey] ?? []
@@ -255,14 +357,8 @@ export function ChatRoom({ roomKey, onBack }: Props) {
     if (!text) return
     const tag = selectedPostTag || subRooms.find(s => s.id !== 'all')?.tag || '#全般'
     setTimelinePosts(prev => [{
-      id: Date.now().toString(),
-      user: 'あなた',
-      color: '#a78bfa',
-      tag,
-      text,
-      time: '今',
-      likes: 0,
-      isFriend: false,
+      id: Date.now().toString(), user: 'あなた', color: t.accent,
+      tag, text, time: '今', likes: 0, isFriend: false,
     }, ...prev])
     setNewPostText('')
     setSelectedPostTag('')
@@ -274,11 +370,8 @@ export function ChatRoom({ roomKey, onBack }: Props) {
     setCommentMap(prev => ({
       ...prev,
       [selectedPost.id]: [...(prev[selectedPost.id] ?? MOCK_COMMENTS), {
-        id: Date.now().toString(),
-        user: 'あなた',
-        color: '#a78bfa',
-        text: commentInput.trim(),
-        time: '今',
+        id: Date.now().toString(), user: 'あなた', color: t.accent,
+        text: commentInput.trim(), time: '今',
       }],
     }))
     setCommentInput('')
@@ -298,29 +391,40 @@ export function ChatRoom({ roomKey, onBack }: Props) {
     return (
       <div
         className="flex flex-col"
-        style={{ height: '100dvh', background: '#07060f', fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
+        style={{ height: '100dvh', background: t.bg, fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
       >
         {/* Header */}
-        <header className="flex items-center gap-3 px-4 flex-shrink-0" style={{ height: '60px', background: '#0d0a1a', borderBottom: '1px solid #1a1530' }}>
-          <button onClick={onBack} style={{ color: '#a78bfa', fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
+        <header
+          className="flex items-center gap-3 px-4 flex-shrink-0"
+          style={{ height: '60px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}
+        >
+          <button onClick={onBack} style={{ color: t.accent, fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
           <div className="flex-1 min-w-0 flex flex-col items-center gap-1">
-            <p style={{ color: '#e8e0ff', fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
-            <span style={{ background: '#1e1535', border: '1px solid #534ab7', color: '#a78bfa', fontSize: '10px', padding: '2px 8px', borderRadius: '10px' }}>
+            <p style={{ color: t.text, fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
+            <span style={{ background: t.badgeBg, border: `1px solid ${t.badgeBorder}`, color: t.badgeText, fontSize: '10px', padding: '2px 8px', borderRadius: '10px' }}>
               全員参加中のルーム
             </span>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <span style={{ color: meta.dot, fontSize: '10px', animation: 'blink 1.4s ease-in-out infinite' }}>●</span>
-            <span style={{ color: '#888', fontSize: '11px' }}>{meta.members}人がいる</span>
+            <span style={{ color: t.subText, fontSize: '11px' }}>{meta.members}人がいる</span>
           </div>
         </header>
 
         {/* ルーム / タイムライン tabs */}
-        <div className="flex flex-shrink-0" style={{ height: '36px', background: '#0a0812', borderBottom: '1px solid #1a1530' }}>
-          {(['rooms', 'timeline'] as const).map(t => (
-            <button key={t} onClick={() => setActiveListTab(t)} className="flex-1 flex items-center justify-center"
-              style={{ fontSize: '12px', color: activeListTab === t ? '#a78bfa' : '#444', borderBottom: activeListTab === t ? '2px solid #7f77dd' : '2px solid transparent' }}>
-              {t === 'rooms' ? 'ルーム' : 'タイムライン'}
+        <div
+          className="flex flex-shrink-0"
+          style={{ height: '36px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}
+        >
+          {(['rooms', 'timeline'] as const).map(tb => (
+            <button key={tb} onClick={() => setActiveListTab(tb)} className="flex-1 flex items-center justify-center"
+              style={{
+                fontSize: '12px',
+                color: activeListTab === tb ? t.tabActive : t.tabInactive,
+                borderBottom: activeListTab === tb ? `2px solid ${t.tabBorder}` : '2px solid transparent',
+                fontWeight: activeListTab === tb ? 600 : 400,
+              }}>
+              {tb === 'rooms' ? 'ルーム' : 'タイムライン'}
             </button>
           ))}
         </div>
@@ -331,38 +435,37 @@ export function ChatRoom({ roomKey, onBack }: Props) {
             subRooms.map(sub =>
               sub.id === 'all' ? (
                 <button key={sub.id} onClick={() => setActiveSubRoom(sub)} className="w-full flex items-center gap-3 text-left"
-                  style={{ padding: '16px', background: '#1e1535', borderBottom: '2px solid #534ab7' }}>
+                  style={{ padding: '16px', background: t.tagBg, borderBottom: `2px solid ${t.tagBorder}` }}>
                   <span style={{ fontSize: '18px' }}>💬</span>
-                  <span style={{ flex: 1, color: '#e8e0ff', fontSize: '15px', fontWeight: 600 }}>ALL</span>
-                  <span style={{ color: '#a78bfa', fontSize: '12px' }}>{sub.memberCount.toLocaleString()}人</span>
+                  <span style={{ flex: 1, color: t.text, fontSize: '15px', fontWeight: 600 }}>ALL</span>
+                  <span style={{ color: t.accent, fontSize: '12px' }}>{sub.memberCount.toLocaleString()}人</span>
                 </button>
               ) : (
                 <button key={sub.id} onClick={() => setActiveSubRoom(sub)} className="w-full flex items-center gap-3 text-left"
-                  style={{ padding: '14px 16px', borderBottom: '1px solid #1a1530' }}>
-                  <span style={{ color: '#534ab7', fontSize: '16px', fontWeight: 700 }}>#</span>
-                  <span style={{ flex: 1, color: '#c4b5fd', fontSize: '14px' }}>
+                  style={{ padding: '14px 16px', borderBottom: `1px solid ${t.cardBorder}` }}>
+                  <span style={{ color: t.accent, fontSize: '16px', fontWeight: 700 }}>#</span>
+                  <span style={{ flex: 1, color: t.text, fontSize: '14px' }}>
                     {sub.tag.startsWith('#') ? sub.tag.slice(1) : sub.tag}
-                    {sub.isNew && <span style={{ marginLeft: '6px', color: '#a78bfa', fontSize: '10px' }}>NEW</span>}
+                    {sub.isNew && <span style={{ marginLeft: '6px', color: t.accent, fontSize: '10px' }}>NEW</span>}
                   </span>
-                  <span style={{ color: '#555', fontSize: '11px' }}>{sub.memberCount.toLocaleString()}人</span>
+                  <span style={{ color: t.subText, fontSize: '11px' }}>{sub.memberCount.toLocaleString()}人</span>
                 </button>
               )
             )
           ) : (
             <>
-              {/* ALL / フレンド toggle switch */}
-              <div style={{ display: 'flex', background: '#1a1528', borderRadius: '20px', padding: '2px', margin: '8px 16px' }}>
+              {/* ALL / フレンド toggle */}
+              <div style={{ display: 'flex', background: t.inputBg, borderRadius: '20px', padding: '2px', margin: '8px 16px', border: `1px solid ${t.inputBorder}` }}>
                 <button onClick={() => setTimelineFilter('all')}
-                  style={{ flex: 1, textAlign: 'center', fontSize: '13px', padding: '6px 24px', borderRadius: '18px', background: timelineFilter === 'all' ? '#534ab7' : 'transparent', color: timelineFilter === 'all' ? '#fff' : '#555' }}>
+                  style={{ flex: 1, textAlign: 'center', fontSize: '13px', padding: '6px 24px', borderRadius: '18px', background: timelineFilter === 'all' ? t.accent : 'transparent', color: timelineFilter === 'all' ? '#fff' : t.subText }}>
                   ALL
                 </button>
                 <button onClick={() => setTimelineFilter('friend')}
-                  style={{ flex: 1, textAlign: 'center', fontSize: '13px', padding: '6px 24px', borderRadius: '18px', background: timelineFilter === 'friend' ? '#534ab7' : 'transparent', color: timelineFilter === 'friend' ? '#fff' : '#555' }}>
+                  style={{ flex: 1, textAlign: 'center', fontSize: '13px', padding: '6px 24px', borderRadius: '18px', background: timelineFilter === 'friend' ? t.accent : 'transparent', color: timelineFilter === 'friend' ? '#fff' : t.subText }}>
                   フレンド
                 </button>
               </div>
 
-              {/* Post cards */}
               {filteredPosts.map(post => (
                 <PostCard
                   key={post.id}
@@ -372,45 +475,43 @@ export function ChatRoom({ roomKey, onBack }: Props) {
                   onToggleLike={() => toggleLike(post.id)}
                   commentCount={(commentMap[post.id] ?? MOCK_COMMENTS).length}
                   onComment={() => { setSelectedPost(post); setCommentInput('') }}
+                  t={t}
                 />
               ))}
             </>
           )}
         </div>
 
-        {/* FAB: ルームタブ → 作成モーダル / タイムラインタブ → 投稿モーダル */}
+        {/* FAB */}
         {activeListTab === 'rooms' && (
-          <button
-            onClick={() => setIsCreating(true)}
-            className="flex items-center justify-center"
-            style={{ position: 'absolute', bottom: '80px', right: '16px', width: '52px', height: '52px', borderRadius: '50%', background: '#534ab7', color: '#fff', fontSize: '22px', boxShadow: '0 4px 14px rgba(83,74,183,0.45)', zIndex: 10 }}
-          >
+          <button onClick={() => setIsCreating(true)} className="flex items-center justify-center"
+            style={{ position: 'absolute', bottom: '80px', right: '16px', width: '52px', height: '52px', borderRadius: '50%', background: t.accent, color: '#fff', fontSize: '22px', boxShadow: `0 4px 14px ${t.accent}66`, zIndex: 10 }}>
             💬
           </button>
         )}
         {activeListTab === 'timeline' && (
-          <button
-            onClick={() => { setIsPosting(true); setSelectedPostTag(subRooms.find(s => s.id !== 'all')?.tag ?? '') }}
+          <button onClick={() => { setIsPosting(true); setSelectedPostTag(subRooms.find(s => s.id !== 'all')?.tag ?? '') }}
             className="flex items-center justify-center"
-            style={{ position: 'absolute', bottom: '80px', right: '16px', width: '48px', height: '48px', borderRadius: '50%', background: '#534ab7', color: '#fff', fontSize: '20px', boxShadow: '0 4px 12px rgba(83,74,183,0.4)', zIndex: 10 }}
-          >
+            style={{ position: 'absolute', bottom: '80px', right: '16px', width: '48px', height: '48px', borderRadius: '50%', background: t.accent, color: '#fff', fontSize: '20px', boxShadow: `0 4px 12px ${t.accent}66`, zIndex: 10 }}>
             ＋
           </button>
         )}
 
         {/* Room creation modal */}
         {isCreating && (
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#0d0a1a', borderTop: '2px solid #534ab7', padding: '20px 16px', zIndex: 100 }}>
-            <p style={{ color: '#e8e0ff', fontSize: '15px', fontWeight: 600, marginBottom: '16px' }}>新しいルームを作成</p>
-            <div className="flex items-center" style={{ background: '#1a1528', borderRadius: '8px', padding: '10px 12px' }}>
-              <span style={{ color: '#534ab7', fontSize: '18px', fontWeight: 700, marginRight: '4px' }}>#</span>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: t.headerBg, borderTop: `2px solid ${t.tabBorder}`, padding: '20px 16px', zIndex: 100 }}>
+            <p style={{ color: t.text, fontSize: '15px', fontWeight: 600, marginBottom: '16px' }}>新しいルームを作成</p>
+            <div className="flex items-center" style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: '8px', padding: '10px 12px' }}>
+              <span style={{ color: t.accent, fontSize: '18px', fontWeight: 700, marginRight: '4px' }}>#</span>
               <input value={newRoomName} onChange={e => setNewRoomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateRoom() }} placeholder="ルーム名を入力" autoFocus
-                style={{ flex: 1, background: 'transparent', border: 'none', color: '#e8e0ff', fontSize: '16px', outline: 'none' }} />
+                style={{ flex: 1, background: 'transparent', border: 'none', color: t.inputText, fontSize: '16px', outline: 'none' }} />
             </div>
-            <button onClick={handleCreateRoom} disabled={!newRoomName.trim()} style={{ width: '100%', padding: '12px', background: '#534ab7', color: '#fff', borderRadius: '8px', marginTop: '16px', fontSize: '14px', fontWeight: 600, opacity: newRoomName.trim() ? 1 : 0.5 }}>
+            <button onClick={handleCreateRoom} disabled={!newRoomName.trim()}
+              style={{ width: '100%', padding: '12px', background: t.accent, color: '#fff', borderRadius: '8px', marginTop: '16px', fontSize: '14px', fontWeight: 600, opacity: newRoomName.trim() ? 1 : 0.5 }}>
               作成する
             </button>
-            <button onClick={() => { setIsCreating(false); setNewRoomName('') }} style={{ width: '100%', padding: '10px', color: '#555', fontSize: '13px', marginTop: '8px' }}>
+            <button onClick={() => { setIsCreating(false); setNewRoomName('') }}
+              style={{ width: '100%', padding: '10px', color: t.subText, fontSize: '13px', marginTop: '8px' }}>
               キャンセル
             </button>
           </div>
@@ -418,22 +519,24 @@ export function ChatRoom({ roomKey, onBack }: Props) {
 
         {/* Post modal */}
         {isPosting && (
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#0d0a1a', borderTop: '2px solid #534ab7', padding: '20px 16px', zIndex: 100 }}>
-            <p style={{ color: '#e8e0ff', fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>今の気持ちをつぶやく</p>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: t.headerBg, borderTop: `2px solid ${t.tabBorder}`, padding: '20px 16px', zIndex: 100 }}>
+            <p style={{ color: t.text, fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>今の気持ちをつぶやく</p>
             <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} rows={3} placeholder="今どんな気持ち？"
-              style={{ width: '100%', background: '#1a1528', border: '1px solid #2a2040', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#e8e0ff', outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
+              style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: t.inputText, outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
             <div className="flex gap-2 flex-wrap" style={{ marginTop: '12px' }}>
               {postTagOptions.map(tag => (
                 <button key={tag} onClick={() => setSelectedPostTag(tag)}
-                  style={{ flexShrink: 0, padding: '4px 12px', borderRadius: '20px', fontSize: '11px', border: selectedPostTag === tag ? '1px solid #534ab7' : '1px solid #2a2040', background: selectedPostTag === tag ? '#1e1535' : 'transparent', color: selectedPostTag === tag ? '#a78bfa' : '#555' }}>
+                  style={{ flexShrink: 0, padding: '4px 12px', borderRadius: '20px', fontSize: '11px', border: selectedPostTag === tag ? `1px solid ${t.accent}` : `1px solid ${t.inputBorder}`, background: selectedPostTag === tag ? t.tagBg : 'transparent', color: selectedPostTag === tag ? t.accent : t.subText }}>
                   {tag}
                 </button>
               ))}
             </div>
-            <button onClick={handlePost} disabled={!newPostText.trim()} style={{ width: '100%', padding: '12px', background: '#534ab7', color: '#fff', borderRadius: '8px', marginTop: '16px', fontSize: '14px', fontWeight: 600, opacity: newPostText.trim() ? 1 : 0.5 }}>
+            <button onClick={handlePost} disabled={!newPostText.trim()}
+              style={{ width: '100%', padding: '12px', background: t.accent, color: '#fff', borderRadius: '8px', marginTop: '16px', fontSize: '14px', fontWeight: 600, opacity: newPostText.trim() ? 1 : 0.5 }}>
               投稿する
             </button>
-            <button onClick={() => { setIsPosting(false); setNewPostText('') }} style={{ width: '100%', padding: '10px', color: '#555', fontSize: '13px', marginTop: '8px' }}>
+            <button onClick={() => { setIsPosting(false); setNewPostText('') }}
+              style={{ width: '100%', padding: '10px', color: t.subText, fontSize: '13px', marginTop: '8px' }}>
               キャンセル
             </button>
           </div>
@@ -442,18 +545,19 @@ export function ChatRoom({ roomKey, onBack }: Props) {
         {/* Comment sheet */}
         {selectedPost && (
           <>
-            <div onClick={() => { setSelectedPost(null); setCommentInput('') }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200 }} />
-            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '390px', height: '60dvh', background: '#0d0a1a', borderTop: '2px solid #1a1530', borderRadius: '16px 16px 0 0', zIndex: 201, display: 'flex', flexDirection: 'column' }}>
+            <div onClick={() => { setSelectedPost(null); setCommentInput('') }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200 }} />
+            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '390px', height: '60dvh', background: t.headerBg, borderTop: `2px solid ${t.border}`, borderRadius: '16px 16px 0 0', zIndex: 201, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
-                <div style={{ width: '32px', height: '3px', background: '#333', borderRadius: '2px' }} />
+                <div style={{ width: '32px', height: '3px', background: t.border, borderRadius: '2px' }} />
               </div>
-              <div className="flex items-start gap-2" style={{ padding: '8px 16px', borderBottom: '1px solid #1a1530' }}>
+              <div className="flex items-start gap-2" style={{ padding: '8px 16px', borderBottom: `1px solid ${t.border}` }}>
                 <div className="flex items-center justify-center flex-shrink-0" style={{ width: '24px', height: '24px', borderRadius: '50%', background: selectedPost.color, fontSize: '9px', fontWeight: 700, color: '#fff', marginTop: '2px' }}>
                   {selectedPost.user[0]}
                 </div>
                 <div className="min-w-0">
-                  <p style={{ color: '#888', fontSize: '11px', marginBottom: '2px' }}>{selectedPost.user}</p>
-                  <p style={{ color: '#c4b5fd', fontSize: '12px', lineHeight: '1.4', overflow: 'hidden', maxHeight: '2.8em' }}>{selectedPost.text}</p>
+                  <p style={{ color: t.subText, fontSize: '11px', marginBottom: '2px' }}>{selectedPost.user}</p>
+                  <p style={{ color: t.text, fontSize: '12px', lineHeight: '1.4', overflow: 'hidden', maxHeight: '2.8em' }}>{selectedPost.text}</p>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto">
@@ -463,17 +567,19 @@ export function ChatRoom({ roomKey, onBack }: Props) {
                       {c.user[0]}
                     </div>
                     <div>
-                      <p style={{ color: '#555', fontSize: '10px', marginBottom: '2px' }}>{c.user} · {c.time}</p>
-                      <p style={{ color: '#c4b5fd', fontSize: '12px', lineHeight: '1.4' }}>{c.text}</p>
+                      <p style={{ color: t.subText, fontSize: '10px', marginBottom: '2px' }}>{c.user} · {c.time}</p>
+                      <p style={{ color: t.text, fontSize: '12px', lineHeight: '1.4' }}>{c.text}</p>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="flex items-center gap-2 px-3 flex-shrink-0" style={{ height: '48px', borderTop: '1px solid #1a1530' }}>
-                <input value={commentInput} onChange={e => setCommentInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddComment() } }} placeholder="コメントを入力..."
-                  style={{ flex: 1, background: '#1a1528', border: '1px solid #2a2040', borderRadius: '20px', padding: '6px 12px', fontSize: '13px', color: '#e8e0ff', outline: 'none' }} />
+              <div className="flex items-center gap-2 px-3 flex-shrink-0" style={{ height: '48px', borderTop: `1px solid ${t.border}` }}>
+                <input value={commentInput} onChange={e => setCommentInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddComment() } }}
+                  placeholder="コメントを入力..."
+                  style={{ flex: 1, background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: '20px', padding: '6px 12px', fontSize: '13px', color: t.inputText, outline: 'none' }} />
                 <button onClick={handleAddComment} disabled={!commentInput.trim()} className="flex items-center justify-center flex-shrink-0 transition-opacity disabled:opacity-35"
-                  style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#534ab7', color: '#fff', fontSize: '14px' }}>
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', background: t.accent, color: '#fff', fontSize: '14px' }}>
                   ↑
                 </button>
               </div>
@@ -490,40 +596,48 @@ export function ChatRoom({ roomKey, onBack }: Props) {
   return (
     <div
       className="flex flex-col"
-      style={{ height: '100dvh', background: '#07060f', fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
+      style={{ height: '100dvh', background: t.bg, fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
     >
       {/* Header */}
       {isIdentity && activeSubRoom !== null ? (
-        <header className="flex items-center gap-3 px-4 flex-shrink-0" style={{ height: '44px', background: '#0d0a1a', borderBottom: '1px solid #1a1530' }}>
-          <button onClick={() => setActiveSubRoom(null)} style={{ color: '#a78bfa', fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
+        <header className="flex items-center gap-3 px-4 flex-shrink-0"
+          style={{ height: '44px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}>
+          <button onClick={() => setActiveSubRoom(null)} style={{ color: t.accent, fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
           <div className="flex-1 min-w-0 text-center">
-            <p style={{ color: '#e8e0ff', fontSize: '14px', fontWeight: 600 }}>{activeSubRoom.tag}</p>
+            <p style={{ color: t.text, fontSize: '14px', fontWeight: 600 }}>{activeSubRoom.tag}</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span style={{ color: '#555', fontSize: '11px' }}>{activeSubRoom.memberCount.toLocaleString()}人</span>
+            <span style={{ color: t.subText, fontSize: '11px' }}>{activeSubRoom.memberCount.toLocaleString()}人</span>
           </div>
         </header>
       ) : (
-        <header className="flex items-center gap-3 px-4 flex-shrink-0" style={{ height: '44px', background: '#0d0a1a', borderBottom: '1px solid #1a1530' }}>
-          <button onClick={onBack} style={{ color: '#a78bfa', fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
+        <header className="flex items-center gap-3 px-4 flex-shrink-0"
+          style={{ height: '44px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}>
+          <button onClick={onBack} style={{ color: t.accent, fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
           <div className="flex-1 min-w-0 text-center">
-            <p style={{ color: '#e8e0ff', fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
+            <p style={{ color: t.text, fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: meta.dot }} />
-            <span style={{ color: '#555', fontSize: '11px' }}>{meta.members}</span>
+            <span style={{ color: t.subText, fontSize: '11px' }}>{meta.members}</span>
           </div>
         </header>
       )}
 
-
       {/* Friend tabs */}
       {hasTabs && (
-        <div className="flex flex-shrink-0" style={{ height: '36px', background: '#0a0812', borderBottom: '1px solid #1a1530' }}>
-          {(['timeline', 'chat'] as ChatTab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)} className="flex-1 flex items-center justify-center"
-              style={{ fontSize: '12px', color: tab === t ? '#e8e0ff' : '#555', borderBottom: tab === t ? `2px solid ${meta.dot}` : '2px solid transparent', fontWeight: tab === t ? 600 : 400, transition: 'color 0.15s' }}>
-              {t === 'timeline' ? 'タイムライン' : 'チャット'}
+        <div className="flex flex-shrink-0"
+          style={{ height: '36px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}>
+          {(['timeline', 'chat'] as ChatTab[]).map(tb => (
+            <button key={tb} onClick={() => setTab(tb)} className="flex-1 flex items-center justify-center"
+              style={{
+                fontSize: '12px',
+                color: tab === tb ? t.tabActive : t.tabInactive,
+                borderBottom: tab === tb ? `2px solid ${t.tabBorder}` : '2px solid transparent',
+                fontWeight: tab === tb ? 600 : 400,
+                transition: 'color 0.15s',
+              }}>
+              {tb === 'timeline' ? 'タイムライン' : 'チャット'}
             </button>
           ))}
         </div>
@@ -532,18 +646,20 @@ export function ChatRoom({ roomKey, onBack }: Props) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
         {tab === 'timeline'
-          ? <FriendTimelineView msgs={msgs} dot={meta.dot} />
-          : <ChatView msgs={msgs} aiTyping={aiTyping} bottomRef={bottomRef} />
+          ? <FriendTimelineView msgs={msgs} dot={meta.dot} t={t} />
+          : <ChatView msgs={msgs} aiTyping={aiTyping} bottomRef={bottomRef} t={t} />
         }
       </div>
 
       {/* Bottom: input */}
       {showBottom && (
-        <div className="flex-shrink-0 flex items-center gap-2 px-3" style={{ height: '56px', background: '#0d0a1a', borderTop: '1px solid #1a1530' }}>
-          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown} placeholder="メッセージを入力..."
-            style={{ flex: 1, background: '#1a1528', border: '1px solid #2a2040', borderRadius: '20px', padding: '8px 14px', fontSize: '13px', color: '#e8e0ff', outline: 'none' }} />
+        <div className="flex-shrink-0 flex items-center gap-2 px-3"
+          style={{ height: '56px', background: t.headerBg, borderTop: `1px solid ${t.border}` }}>
+          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown}
+            placeholder="メッセージを入力..."
+            style={{ flex: 1, background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: '20px', padding: '8px 14px', fontSize: '13px', color: t.inputText, outline: 'none' }} />
           <button onClick={send} disabled={!input.trim()} className="flex items-center justify-center flex-shrink-0 transition-opacity disabled:opacity-35"
-            style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#534ab7', color: '#fff', fontSize: '16px' }}>
+            style={{ width: '36px', height: '36px', borderRadius: '50%', background: t.accent, color: '#fff', fontSize: '16px' }}>
             ↑
           </button>
         </div>
@@ -561,28 +677,30 @@ type PostCardProps = {
   onToggleLike: () => void
   commentCount: number
   onComment: () => void
+  t: PT
 }
 
-function PostCard({ post, liked, likeCount, onToggleLike, commentCount, onComment }: PostCardProps) {
+function PostCard({ post, liked, likeCount, onToggleLike, commentCount, onComment, t }: PostCardProps) {
   return (
-    <div style={{ padding: '14px 16px', borderBottom: '1px solid #1a1530', background: '#07060f', borderLeft: post.isFriend ? `2px solid ${post.color}` : undefined }}>
+    <div style={{ padding: '14px 16px', borderBottom: `1px solid ${t.cardBorder}`, background: t.cardBg, borderLeft: post.isFriend ? `2px solid ${post.color}` : undefined }}>
       <div className="flex items-center" style={{ gap: '8px' }}>
-        <div className="flex items-center justify-center flex-shrink-0" style={{ width: '28px', height: '28px', borderRadius: '50%', background: post.color, fontSize: '11px', fontWeight: 700, color: '#fff' }}>
+        <div className="flex items-center justify-center flex-shrink-0"
+          style={{ width: '28px', height: '28px', borderRadius: '50%', background: post.color, fontSize: '11px', fontWeight: 700, color: '#fff' }}>
           {post.user[0]}
         </div>
-        <span style={{ color: '#888', fontSize: '12px' }}>{post.user}</span>
-        <span style={{ background: '#1e1535', color: '#a78bfa', fontSize: '10px', padding: '2px 8px', borderRadius: '10px', border: '1px solid #2a1f4a', flexShrink: 0 }}>{post.tag}</span>
-        <span style={{ color: '#444', fontSize: '10px', marginLeft: 'auto', flexShrink: 0 }}>{post.time}</span>
+        <span style={{ color: t.subText, fontSize: '12px' }}>{post.user}</span>
+        <span style={{ background: t.tagBg, color: t.tagText, fontSize: '10px', padding: '2px 8px', borderRadius: '10px', border: `1px solid ${t.tagBorder}`, flexShrink: 0 }}>{post.tag}</span>
+        <span style={{ color: t.dimText, fontSize: '10px', marginLeft: 'auto', flexShrink: 0 }}>{post.time}</span>
       </div>
-      <p style={{ color: '#c4b5fd', fontSize: '13px', lineHeight: '1.6', marginTop: '8px', wordBreak: 'break-word' }}>{post.text}</p>
+      <p style={{ color: t.text, fontSize: '13px', lineHeight: '1.6', marginTop: '8px', wordBreak: 'break-word' }}>{post.text}</p>
       <div className="flex" style={{ justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
         <button onClick={onToggleLike} className="flex items-center gap-1">
           <span style={{ fontSize: '13px' }}>{liked ? '❤️' : '🤍'}</span>
-          <span style={{ color: liked ? '#f472b6' : '#555', fontSize: '12px' }}>{likeCount}</span>
+          <span style={{ color: liked ? t.likeActive : t.dimText, fontSize: '12px' }}>{likeCount}</span>
         </button>
         <button onClick={onComment} className="flex items-center gap-1">
           <span style={{ fontSize: '13px' }}>💬</span>
-          <span style={{ color: '#555', fontSize: '12px' }}>{commentCount}</span>
+          <span style={{ color: t.dimText, fontSize: '12px' }}>{commentCount}</span>
         </button>
       </div>
     </div>
@@ -591,33 +709,34 @@ function PostCard({ post, liked, likeCount, onToggleLike, commentCount, onCommen
 
 // ── Friend timeline view ──────────────────────────────────────────────────────
 
-function FriendTimelineView({ msgs, dot }: { msgs: Message[]; dot: string }) {
+function FriendTimelineView({ msgs, dot, t }: { msgs: Message[]; dot: string; t: PT }) {
   const visible = msgs.filter(m => m.sender !== 'ai')
   return (
     <div className="px-4 py-3 space-y-3">
-      {visible.map(msg => <FriendTimelineCard key={msg.id} msg={msg} dot={dot} />)}
+      {visible.map(msg => <FriendTimelineCard key={msg.id} msg={msg} dot={dot} t={t} />)}
     </div>
   )
 }
 
-function FriendTimelineCard({ msg, dot }: { msg: Message; dot: string }) {
+function FriendTimelineCard({ msg, dot, t }: { msg: Message; dot: string; t: PT }) {
   const [liked, setLiked] = useState(false)
   const [count, setCount] = useState(msg.likes ?? 0)
   const isMe = msg.sender === 'me'
 
   return (
-    <div style={{ background: '#0d0a1a', border: `1px solid ${isMe ? '#2a2048' : '#1a1530'}`, borderRadius: '12px', padding: '12px 14px' }}>
+    <div style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: '12px', padding: '12px 14px' }}>
       <div className="flex items-center gap-2 mb-2">
-        <Avatar label={isMe ? 'me' : msg.sender.charAt(0).toUpperCase()} color={isMe ? '#534ab7' : (msg.color ?? dot)} />
-        <span style={{ color: isMe ? '#a78bfa' : (msg.color ?? '#888'), fontSize: '12px', fontWeight: 600 }}>{isMe ? 'あなた' : msg.sender}</span>
-        <span style={{ color: '#333', fontSize: '10px', marginLeft: 'auto' }}>{msg.timestamp}</span>
+        <Avatar label={isMe ? 'me' : msg.sender.charAt(0).toUpperCase()} color={isMe ? t.accent : (msg.color ?? dot)} />
+        <span style={{ color: isMe ? t.accent : (msg.color ?? t.subText), fontSize: '12px', fontWeight: 600 }}>{isMe ? 'あなた' : msg.sender}</span>
+        <span style={{ color: t.dimText, fontSize: '10px', marginLeft: 'auto' }}>{msg.timestamp}</span>
       </div>
-      <p style={{ color: '#c4b5fd', fontSize: '13px', lineHeight: '1.6', wordBreak: 'break-word' }}>{msg.text}</p>
+      <p style={{ color: t.text, fontSize: '13px', lineHeight: '1.6', wordBreak: 'break-word' }}>{msg.text}</p>
       <div className="flex items-center gap-1 mt-3">
-        <button onClick={() => { setLiked(p => !p); setCount(p => p + (liked ? -1 : 1)) }} style={{ color: liked ? '#f472b6' : '#333', fontSize: '14px', lineHeight: 1 }}>
+        <button onClick={() => { setLiked(p => !p); setCount(p => p + (liked ? -1 : 1)) }}
+          style={{ color: liked ? t.likeActive : t.dimText, fontSize: '14px', lineHeight: 1 }}>
           {liked ? '♥' : '♡'}
         </button>
-        <span style={{ color: '#444', fontSize: '11px' }}>{count}</span>
+        <span style={{ color: t.dimText, fontSize: '11px' }}>{count}</span>
       </div>
     </div>
   )
@@ -625,24 +744,24 @@ function FriendTimelineCard({ msg, dot }: { msg: Message; dot: string }) {
 
 // ── Chat view ─────────────────────────────────────────────────────────────────
 
-function ChatView({ msgs, aiTyping, bottomRef }: { msgs: Message[]; aiTyping: boolean; bottomRef: React.RefObject<HTMLDivElement | null> }) {
+function ChatView({ msgs, aiTyping, bottomRef, t }: { msgs: Message[]; aiTyping: boolean; bottomRef: React.RefObject<HTMLDivElement | null>; t: PT }) {
   return (
     <div className="px-4 py-4 space-y-4">
-      {msgs.map(msg => <Bubble key={msg.id} msg={msg} />)}
-      {aiTyping && <TypingIndicator />}
+      {msgs.map(msg => <Bubble key={msg.id} msg={msg} t={t} />)}
+      {aiTyping && <TypingIndicator t={t} />}
       <div ref={bottomRef} />
     </div>
   )
 }
 
-function TypingIndicator() {
+function TypingIndicator({ t }: { t: PT }) {
   return (
     <div className="flex gap-2 items-start">
-      <Avatar label="AI" color="#534ab7" />
-      <div style={{ background: '#1e1535', borderLeft: '2px solid #a78bfa', borderRadius: '12px 12px 12px 2px', padding: '10px 14px' }}>
+      <Avatar label="AI" color={t.accent} />
+      <div style={{ background: t.bubbleAi, borderLeft: `2px solid ${t.bubbleAiBorder}`, borderRadius: '12px 12px 12px 2px', padding: '10px 14px' }}>
         <div className="flex gap-1">
           {[0, 1, 2].map(i => (
-            <span key={i} style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: '#a78bfa', animation: `bounce 1s ease-in-out ${i * 0.15}s infinite` }} />
+            <span key={i} style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: t.accent, animation: `bounce 1s ease-in-out ${i * 0.15}s infinite` }} />
           ))}
         </div>
       </div>
@@ -652,36 +771,36 @@ function TypingIndicator() {
 
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
-function Bubble({ msg }: { msg: Message }) {
+function Bubble({ msg, t }: { msg: Message; t: PT }) {
   const isMe = msg.sender === 'me'
   const isAI = msg.sender === 'ai'
 
   if (isMe) return (
     <div className="flex justify-end">
       <div>
-        <div style={{ background: '#534ab7', color: '#fff', borderRadius: '12px 12px 2px 12px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', wordBreak: 'break-word' }}>{msg.text}</div>
-        <p style={{ color: '#444', fontSize: '10px', textAlign: 'right', marginTop: '2px' }}>{msg.timestamp}</p>
+        <div style={{ background: t.bubbleMe, color: t.bubbleMeText, borderRadius: '12px 12px 2px 12px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', wordBreak: 'break-word' }}>{msg.text}</div>
+        <p style={{ color: t.dimText, fontSize: '10px', textAlign: 'right', marginTop: '2px' }}>{msg.timestamp}</p>
       </div>
     </div>
   )
 
   if (isAI) return (
     <div className="flex gap-2 items-start">
-      <Avatar label="AI" color="#534ab7" />
+      <Avatar label="AI" color={t.accent} />
       <div>
-        <div style={{ background: '#1e1535', borderLeft: '2px solid #a78bfa', color: '#c4b5fd', borderRadius: '12px 12px 12px 2px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', fontStyle: 'italic', wordBreak: 'break-word' }}>{msg.text}</div>
-        <p style={{ color: '#444', fontSize: '10px', marginTop: '2px' }}>{msg.timestamp}</p>
+        <div style={{ background: t.bubbleAi, borderLeft: `2px solid ${t.bubbleAiBorder}`, color: t.bubbleAiText, borderRadius: '12px 12px 12px 2px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', fontStyle: 'italic', wordBreak: 'break-word' }}>{msg.text}</div>
+        <p style={{ color: t.dimText, fontSize: '10px', marginTop: '2px' }}>{msg.timestamp}</p>
       </div>
     </div>
   )
 
   return (
     <div className="flex gap-2 items-start">
-      <Avatar label={msg.sender.charAt(0).toUpperCase()} color={msg.color ?? '#534ab7'} />
+      <Avatar label={msg.sender.charAt(0).toUpperCase()} color={msg.color ?? t.accent} />
       <div>
-        <p style={{ color: '#555', fontSize: '10px', marginBottom: '2px' }}>{msg.sender}</p>
-        <div style={{ background: '#1e1a2e', color: '#c4b5fd', borderRadius: '12px 12px 12px 2px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', wordBreak: 'break-word' }}>{msg.text}</div>
-        <p style={{ color: '#444', fontSize: '10px', marginTop: '2px' }}>{msg.timestamp}</p>
+        <p style={{ color: t.subText, fontSize: '10px', marginBottom: '2px' }}>{msg.sender}</p>
+        <div style={{ background: t.bubbleOther, color: t.bubbleOtherText, borderRadius: '12px 12px 12px 2px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', wordBreak: 'break-word' }}>{msg.text}</div>
+        <p style={{ color: t.dimText, fontSize: '10px', marginTop: '2px' }}>{msg.timestamp}</p>
       </div>
     </div>
   )
@@ -689,7 +808,8 @@ function Bubble({ msg }: { msg: Message }) {
 
 function Avatar({ label, color }: { label: string; color: string }) {
   return (
-    <div className="flex items-center justify-center flex-shrink-0" style={{ width: '24px', height: '24px', borderRadius: '50%', background: color, fontSize: '9px', fontWeight: 700, color: '#fff' }}>
+    <div className="flex items-center justify-center flex-shrink-0"
+      style={{ width: '24px', height: '24px', borderRadius: '50%', background: color, fontSize: '9px', fontWeight: 700, color: '#fff' }}>
       {label}
     </div>
   )

@@ -45,11 +45,11 @@ const GRADIENTS: Record<Period, string> = {
   night:     'linear-gradient(to bottom, #06000f 0%, #0d0a2e 55%, #1a0e3a 100%)',
   morning:   'linear-gradient(to bottom, #e0f4ff 0%, #b8e0f7 50%, #87ceeb 100%)',
   afternoon: 'linear-gradient(to bottom, #5ab8f0 0%, #87ceeb 55%, #b0ddf5 100%)',
-  evening:   'linear-gradient(to bottom, #c82800 0%, #ff6a00 30%, #9d2e1e 65%, #2d1b69 100%)',
+  evening:   'linear-gradient(to bottom, #ffd080 0%, #ff8c3a 35%, #e85030 62%, #b03060 82%, #2d1b69 100%)',
 }
 
-function Cloud({ dark = false }: { dark?: boolean }) {
-  const base = dark ? 'rgba(20,10,5,0.85)' : 'white'
+function Cloud({ dark = false, color }: { dark?: boolean; color?: string }) {
+  const base = color ?? (dark ? 'rgba(20,10,5,0.85)' : 'white')
   return (
     <div style={{ position: 'relative', width: '90px', height: '40px' }}>
       <div style={{ position: 'absolute', bottom: 0, left: '8%', width: '84%', height: '22px', borderRadius: '11px', background: base }} />
@@ -196,11 +196,11 @@ export function SkyLayer({ hour }: { hour: number }) {
             <div
               style={{
                 position: 'absolute',
-                right: '14%', bottom: '26%',
+                right: '15%', top: '20%',
                 width: '50px', height: '50px',
                 borderRadius: '50%',
-                background: 'radial-gradient(circle, #ffbb66, #ff5500, #cc2000)',
-                boxShadow: '0 0 32px 12px rgba(255,90,0,0.5), 0 0 80px 30px rgba(200,50,0,0.2)',
+                background: 'radial-gradient(circle, #fff0b0, #ffcc44, #ff8c00)',
+                boxShadow: '0 0 32px 12px rgba(255,180,40,0.55), 0 0 80px 30px rgba(255,130,0,0.22)',
               }}
             />
             {EV_CLOUDS.map((c, i) => (
@@ -210,15 +210,15 @@ export function SkyLayer({ hour }: { hour: number }) {
                   position: 'absolute',
                   left: `${c.left}%`,
                   top:  `${c.top}%`,
-                  opacity: 0.6,
+                  opacity: 0.85,
                   transform: 'scale(1.3)',
                   transformOrigin: 'left top',
                 }}
               >
-                <Cloud dark />
+                <Cloud color={i % 2 === 0 ? 'rgba(254,215,170,0.72)' : 'rgba(254,205,211,0.60)'} />
               </div>
             ))}
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(100,30,0,0.18)' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(90,20,130,0.07)' }} />
           </>
         )}
       </div>

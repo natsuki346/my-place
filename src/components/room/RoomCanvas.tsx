@@ -6,7 +6,7 @@ import { useWorldStore } from '@/store/useWorldStore'
 import { SHOP_AVATARS } from '@/constants/avatars'
 import { SkyLayer } from '@/components/room/SkyLayer'
 
-// ── Post bubble (HTML overlay with CSS float-up animation) ────────────────────
+// ── Post bubble ────────────────────────────────────────────────────────────────
 
 type Post = { id: string; text: string; color: string; x: number; y: number }
 
@@ -48,6 +48,37 @@ function PostBubble({ post, onExpire }: { post: Post; onExpire: (id: string) => 
       </div>
     </div>
   )
+}
+
+// ── Item catalog ──────────────────────────────────────────────────────────────
+
+type CatalogItem = { emoji: string; name: string }
+type PlacedItem  = { id: string; emoji: string; x: number; y: number }
+
+const CATALOG_TABS = ['家具', '植物', 'デコ'] as const
+type CatalogTab = typeof CATALOG_TABS[number]
+
+const CATALOG: Record<CatalogTab, CatalogItem[]> = {
+  '家具': [
+    { emoji: '🛋️', name: 'ソファ' },
+    { emoji: '📺', name: 'テレビ' },
+    { emoji: '🖥️', name: 'PC' },
+    { emoji: '🛏️', name: 'ベッド' },
+    { emoji: '📚', name: '本棚' },
+    { emoji: '🎸', name: 'ギター' },
+  ],
+  '植物': [
+    { emoji: '🌵', name: 'サボテン' },
+    { emoji: '🪴', name: '観葉植物' },
+    { emoji: '🌸', name: '桜' },
+    { emoji: '🎋', name: '竹' },
+  ],
+  'デコ': [
+    { emoji: '🖼️', name: '絵画' },
+    { emoji: '🕯️', name: 'キャンドル' },
+    { emoji: '🪞', name: '鏡' },
+    { emoji: '⭐', name: '飾り' },
+  ],
 }
 
 // ── Emotion colors ────────────────────────────────────────────────────────────
@@ -126,11 +157,16 @@ export function RoomCanvas({ onAvatarClick }: Props) {
   const addPost    = useWorldStore((s) => s.addPost)
   const removePost = useWorldStore((s) => s.removePost)
 
-  const [modalOpen,     setModalOpen]     = useState(false)
-  const [postText,      setPostText]      = useState('')
-  const [selectedColor, setSelectedColor] = useState(EMOTION_COLORS[0].value)
-  const [currentHour,   setCurrentHour]   = useState(() => new Date().getHours())
-  const [xform,         setXform]         = useState({ scale: 1, tx: 0, ty: 0 })
+  const [modalOpen,       setModalOpen]       = useState(false)
+  const [postText,        setPostText]        = useState('')
+  const [selectedColor,   setSelectedColor]   = useState(EMOTION_COLORS[0].value)
+  const [currentHour,     setCurrentHour]     = useState(() => new Date().getHours())
+  const [xform,           setXform]           = useState({ scale: 1, tx: 0, ty: 0 })
+  const [placedItems,     setPlacedItems]     = useState<PlacedItem[]>([])
+  const [placingItem,     setPlacingItem]     = useState<CatalogItem | null>(null)
+  const [catalogOpen,     setCatalogOpen]     = useState(false)
+  const [catalogTab,      setCatalogTab]      = useState<CatalogTab>('家具')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
   useEffect(() => {
     const id = setInterval(() => setCurrentHour(new Date().getHours()), 60_000)
@@ -138,17 +174,25 @@ export function RoomCanvas({ onAvatarClick }: Props) {
   }, [])
 
   // Stable refs
-  const soulmateHit     = useRef({ x: 0, y: 0, r: 30 })
+  const soulmateHit      = useRef({ x: 0, y: 0, r: 30 })
   const onAvatarClickRef = useRef(onAvatarClick)
   onAvatarClickRef.current = onAvatarClick
+  const xformRef         = useRef({ scale: 1, tx: 0, ty: 0 })
 
-  // Transform ref — live values without re-render cost inside touch handlers
-  const xformRef = useRef({ scale: 1, tx: 0, ty: 0 })
-
-  // Selected avatar (sync to ref so RAF closure stays current)
   const selectedAvatarId    = useWorldStore((s) => s.selectedAvatarId)
   const selectedAvatarIdRef = useRef<number | null>(null)
   selectedAvatarIdRef.current = selectedAvatarId
+
+  // Placement ref — live for canvas click handler ([] deps effect)
+  const placingItemRef = useRef(placingItem)
+  placingItemRef.current = placingItem
+
+  // Item drag refs
+  const itemActiveRef = useRef(false)
+  const draggingIdRef = useRef<string | null>(null)
+  const dragStartRef  = useRef<{ clientX: number; clientY: number; itemX: number; itemY: number } | null>(null)
+  const isDraggingRef = useRef(false)
+  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handlePost = () => {
     const text = postText.trim()
@@ -170,13 +214,14 @@ export function RoomCanvas({ onAvatarClick }: Props) {
     const el = wrapperRef.current
     if (!el) return
 
-    let lastTap    = 0
-    let pinchDist0 = 0
+    let lastTap     = 0
+    let pinchDist0  = 0
     let pinchScale0 = 1
     let panX0 = 0, panY0 = 0, panTx0 = 0, panTy0 = 0
     let isPinching = false, isPanning = false
 
     const onTouchStart = (e: TouchEvent) => {
+      if (itemActiveRef.current) return
       if (e.touches.length === 2) {
         isPinching  = true
         isPanning   = false
@@ -188,14 +233,13 @@ export function RoomCanvas({ onAvatarClick }: Props) {
       } else if (e.touches.length === 1) {
         const now = Date.now()
         if (now - lastTap < 280) {
-          // Double-tap → reset
           xformRef.current = { scale: 1, tx: 0, ty: 0 }
           setXform({ scale: 1, tx: 0, ty: 0 })
           lastTap = 0
           return
         }
-        lastTap   = now
-        isPanning = true
+        lastTap    = now
+        isPanning  = true
         isPinching = false
         panX0  = e.touches[0].clientX
         panY0  = e.touches[0].clientY
@@ -222,10 +266,7 @@ export function RoomCanvas({ onAvatarClick }: Props) {
       }
     }
 
-    const onTouchEnd = () => {
-      isPinching = false
-      isPanning  = false
-    }
+    const onTouchEnd = () => { isPinching = false; isPanning = false }
 
     el.addEventListener('touchstart', onTouchStart, { passive: true })
     el.addEventListener('touchmove',  onTouchMove,  { passive: false })
@@ -254,13 +295,23 @@ export function RoomCanvas({ onAvatarClick }: Props) {
     const ro = new ResizeObserver(resize)
     ro.observe(canvas)
 
-    // Normalize click coordinates accounting for CSS scale on wrapper
     const handleClick = (e: MouseEvent) => {
       const rect   = canvas.getBoundingClientRect()
       const scaleX = canvas.width  / rect.width
       const scaleY = canvas.height / rect.height
       const mx = (e.clientX - rect.left) * scaleX
       const my = (e.clientY - rect.top)  * scaleY
+
+      if (placingItemRef.current) {
+        setPlacedItems(prev => [...prev, {
+          id: `${Date.now()}`,
+          emoji: placingItemRef.current!.emoji,
+          x: mx / canvas.width  * 100,
+          y: my / canvas.height * 100,
+        }])
+        return
+      }
+
       const { x, y, r } = soulmateHit.current
       if (Math.hypot(mx - x, my - y) < r) onAvatarClickRef.current?.()
     }
@@ -276,7 +327,6 @@ export function RoomCanvas({ onAvatarClick }: Props) {
 
       ctx.clearRect(0, 0, W, H)
 
-      // Layout
       const cx      = W / 2
       const floorY  = H * 0.65
       const floorHW = Math.min(Math.floor(W * 0.48), 185)
@@ -301,7 +351,6 @@ export function RoomCanvas({ onAvatarClick }: Props) {
       strokeLine(ctx, BK, FL)
       strokeLine(ctx, BK, FR)
 
-      // AI avatar (floor center-right, sin-wave bob)
       const sx = Math.min(cx + floorHW * 0.42, W - 42)
       const sy = floorY + floorHD * 0.25 + Math.sin(t * 0.0014) * 5
       soulmateHit.current = { x: sx, y: sy, r: 32 }
@@ -332,22 +381,66 @@ export function RoomCanvas({ onAvatarClick }: Props) {
     night:     'bg-pink-600',
   }[fabPeriod]
 
+  const periodAccent = {
+    morning:   '#0ea5e9',
+    afternoon: '#3b82f6',
+    evening:   '#f97316',
+    night:     '#818cf8',
+  }[fabPeriod]
+
   // ── JSX ───────────────────────────────────────────────────────────────────
   return (
     <div
       className="relative flex flex-col h-full select-none"
       style={{ background: '#0a0812', fontFamily: 'system-ui, sans-serif' }}
     >
+      <style>{`
+        @keyframes floatUp {
+          0%   { transform: translateX(-50%) translateY(0);      opacity: 1; }
+          80%  { transform: translateX(-50%) translateY(-250px); opacity: 1; }
+          100% { transform: translateX(-50%) translateY(-300px); opacity: 0; }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(100%) }
+          to   { transform: translateY(0) }
+        }
+        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+      `}</style>
+
       {/* Canvas with pinch/pan wrapper */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
-        <style>{`
-          @keyframes floatUp {
-            0%   { transform: translateX(-50%) translateY(0);      opacity: 1; }
-            80%  { transform: translateX(-50%) translateY(-250px); opacity: 1; }
-            100% { transform: translateX(-50%) translateY(-300px); opacity: 0; }
-          }
-        `}</style>
+        {/* Placement mode banner */}
+        {placingItem && (
+          <div
+            style={{
+              position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+              background: `${periodAccent}d0`,
+              backdropFilter: 'blur(8px)',
+              padding: '10px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              animation: 'fadeIn 0.15s ease',
+            }}
+          >
+            <span style={{ fontSize: '13px', color: '#fff', fontWeight: 600 }}>
+              {placingItem.emoji}　部屋の中をタップして配置
+            </span>
+            <button
+              onClick={() => setPlacingItem(null)}
+              style={{
+                fontSize: '12px', color: '#fff',
+                padding: '3px 12px',
+                border: '1px solid rgba(255,255,255,0.5)',
+                borderRadius: '12px',
+                background: 'rgba(255,255,255,0.15)',
+              }}
+            >
+              完了
+            </button>
+          </div>
+        )}
+
         <SkyLayer hour={currentHour} />
+
         <div
           ref={wrapperRef}
           style={{
@@ -361,15 +454,100 @@ export function RoomCanvas({ onAvatarClick }: Props) {
           }}
         >
           <canvas ref={canvasRef} className="block w-full h-full" />
+
+          {/* Placed items — inside pan/zoom, draggable, long-press to delete */}
+          {placedItems.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                position: 'absolute',
+                left: `${item.x}%`,
+                top:  `${item.y}%`,
+                transform: 'translate(-50%, -50%)',
+                fontSize: '36px',
+                lineHeight: 1,
+                zIndex: 3,
+                touchAction: 'none',
+                userSelect: 'none',
+                cursor: isDraggingRef.current && draggingIdRef.current === item.id ? 'grabbing' : 'grab',
+              }}
+              onPointerDown={(e) => {
+                itemActiveRef.current = true
+                e.currentTarget.setPointerCapture(e.pointerId)
+                draggingIdRef.current = item.id
+                dragStartRef.current  = { clientX: e.clientX, clientY: e.clientY, itemX: item.x, itemY: item.y }
+                isDraggingRef.current = false
+                pressTimerRef.current = setTimeout(() => {
+                  if (!isDraggingRef.current) setDeleteConfirmId(item.id)
+                }, 500)
+              }}
+              onPointerMove={(e) => {
+                if (draggingIdRef.current !== item.id || !dragStartRef.current) return
+                const dx = e.clientX - dragStartRef.current.clientX
+                const dy = e.clientY - dragStartRef.current.clientY
+                if (!isDraggingRef.current && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+                  isDraggingRef.current = true
+                  if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null }
+                }
+                if (!isDraggingRef.current) return
+                const wrapper = wrapperRef.current
+                if (!wrapper) return
+                const newX = dragStartRef.current.itemX + (dx / xformRef.current.scale) / wrapper.clientWidth  * 100
+                const newY = dragStartRef.current.itemY + (dy / xformRef.current.scale) / wrapper.clientHeight * 100
+                setPlacedItems(prev => prev.map(i =>
+                  i.id === item.id
+                    ? { ...i, x: Math.max(2, Math.min(98, newX)), y: Math.max(2, Math.min(98, newY)) }
+                    : i
+                ))
+              }}
+              onPointerUp={() => {
+                itemActiveRef.current = false
+                draggingIdRef.current = null
+                dragStartRef.current  = null
+                isDraggingRef.current = false
+                if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null }
+              }}
+              onPointerCancel={() => {
+                itemActiveRef.current = false
+                draggingIdRef.current = null
+                dragStartRef.current  = null
+                isDraggingRef.current = false
+                if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null }
+              }}
+            >
+              {item.emoji}
+            </div>
+          ))}
         </div>
 
-        {/* Post bubble overlay — floats above canvas, unaffected by pinch/pan */}
+        {/* Post bubble overlay */}
         <div style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', overflow: 'hidden' }}>
           {posts.map((post) => (
             <PostBubble key={post.id} post={post} onExpire={removePost} />
           ))}
         </div>
       </div>
+
+      {/* ── 🔧 button (bottom-left) ──────────────────────────────── */}
+      <button
+        onClick={() => placingItem ? setPlacingItem(null) : setCatalogOpen(true)}
+        className="flex items-center justify-center transition-transform active:scale-95"
+        style={{
+          position: 'absolute',
+          bottom: '16px',
+          left: '16px',
+          width: '48px',
+          height: '48px',
+          borderRadius: '50%',
+          background: placingItem ? periodAccent : 'rgba(255,255,255,0.82)',
+          boxShadow: '0 2px 14px rgba(0,0,0,0.22)',
+          fontSize: '22px',
+          zIndex: 10,
+          border: placingItem ? `2px solid ${periodAccent}` : 'none',
+        }}
+      >
+        🔧
+      </button>
 
       {/* FAB — post button */}
       <button
@@ -390,29 +568,22 @@ export function RoomCanvas({ onAvatarClick }: Props) {
         <Heart size={22} strokeWidth={2} fill="currentColor" />
       </button>
 
-      {/* ── Post modal (centered fade-in) ─────────────────────────── */}
+      {/* ── Post modal ───────────────────────────────────────────── */}
       {modalOpen && (
         <div
           className="absolute inset-0 z-50 flex items-center justify-center"
           style={{ background: 'rgba(0,0,0,0.55)', animation: 'fadeIn 0.18s ease' }}
           onClick={(e) => { if (e.target === e.currentTarget) setModalOpen(false) }}
         >
-          <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
           <div
             className="w-full space-y-4"
             style={{
-              maxWidth: '320px',
-              margin: '0 16px',
-              background: '#0d0a1a',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '20px',
-              padding: '24px 20px 20px',
+              maxWidth: '320px', margin: '0 16px',
+              background: '#0d0a1a', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '20px', padding: '24px 20px 20px',
             }}
           >
-            <p style={{ color: '#fff', fontSize: '15px', fontWeight: 600, textAlign: 'center' }}>
-              今の気持ちは？
-            </p>
-
+            <p style={{ color: '#fff', fontSize: '15px', fontWeight: 600, textAlign: 'center' }}>今の気持ちは？</p>
             <textarea
               value={postText}
               onChange={(e) => setPostText(e.target.value)}
@@ -421,29 +592,17 @@ export function RoomCanvas({ onAvatarClick }: Props) {
               autoFocus
               className="w-full resize-none outline-none"
               style={{
-                background: 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '12px',
-                padding: '12px 14px',
-                fontSize: '14px',
-                color: '#fff',
-                lineHeight: '1.5',
+                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '12px', padding: '12px 14px', fontSize: '14px', color: '#fff', lineHeight: '1.5',
               }}
               onFocus={(e) => (e.currentTarget.style.borderColor = 'rgba(83,74,183,0.6)')}
               onBlur={(e)  => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
             />
-
             <div className="flex gap-2">
               <button
                 onClick={() => { setModalOpen(false); setPostText('') }}
                 className="flex-1 transition-opacity"
-                style={{
-                  borderRadius: '24px',
-                  padding: '11px',
-                  fontSize: '14px',
-                  color: 'rgba(255,255,255,0.5)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                }}
+                style={{ borderRadius: '24px', padding: '11px', fontSize: '14px', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.12)' }}
               >
                 キャンセル
               </button>
@@ -451,13 +610,7 @@ export function RoomCanvas({ onAvatarClick }: Props) {
                 onClick={handlePost}
                 disabled={!postText.trim()}
                 className="flex-1 font-semibold transition-opacity disabled:opacity-30"
-                style={{
-                  background: '#534ab7',
-                  borderRadius: '24px',
-                  padding: '11px',
-                  fontSize: '14px',
-                  color: '#fff',
-                }}
+                style={{ background: '#534ab7', borderRadius: '24px', padding: '11px', fontSize: '14px', color: '#fff' }}
               >
                 投稿する
               </button>
@@ -466,6 +619,132 @@ export function RoomCanvas({ onAvatarClick }: Props) {
         </div>
       )}
 
+      {/* ── Catalog modal (bottom sheet) ─────────────────────────── */}
+      {catalogOpen && (
+        <div
+          className="absolute inset-0 z-50"
+          style={{ background: 'rgba(0,0,0,0.55)', animation: 'fadeIn 0.15s ease' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setCatalogOpen(false) }}
+        >
+          <div
+            style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              background: '#1a1530', borderRadius: '20px 20px 0 0',
+              maxHeight: '74%', display: 'flex', flexDirection: 'column',
+              animation: 'slideUp 0.22s ease',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 8px' }}>
+              <p style={{ color: '#fff', fontSize: '15px', fontWeight: 600 }}>アイテム図鑑</p>
+              <button
+                onClick={() => setCatalogOpen(false)}
+                style={{ color: 'rgba(255,255,255,0.45)', fontSize: '22px', lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Category tabs */}
+            <div style={{ display: 'flex', paddingLeft: '8px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              {CATALOG_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setCatalogTab(tab)}
+                  style={{
+                    padding: '8px 20px', fontSize: '13px',
+                    fontWeight: catalogTab === tab ? 600 : 400,
+                    color: catalogTab === tab ? '#fff' : 'rgba(255,255,255,0.38)',
+                    borderBottom: catalogTab === tab ? `2px solid ${periodAccent}` : '2px solid transparent',
+                    background: 'transparent', transition: 'color 0.12s',
+                  }}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {/* Item grid (3 columns) */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                {CATALOG[catalogTab].map((item, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      background: 'rgba(255,255,255,0.06)', borderRadius: '16px',
+                      padding: '16px 8px 12px',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                    }}
+                  >
+                    <span style={{ fontSize: '36px', lineHeight: 1.2 }}>{item.emoji}</span>
+                    <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.75)', textAlign: 'center' }}>{item.name}</span>
+                    <button
+                      onClick={() => { setPlacingItem(item); setCatalogOpen(false) }}
+                      style={{
+                        marginTop: '4px', padding: '5px 16px',
+                        fontSize: '11px', fontWeight: 600, color: '#fff',
+                        background: periodAccent, borderRadius: '20px',
+                      }}
+                    >
+                      使用する
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete confirmation ──────────────────────────────────── */}
+      {deleteConfirmId && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.60)', animation: 'fadeIn 0.15s ease' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirmId(null) }}
+        >
+          <div
+            style={{
+              background: '#1a1530', borderRadius: '20px',
+              padding: '28px 24px 20px', width: '260px', textAlign: 'center',
+            }}
+          >
+            <p style={{ fontSize: '36px', marginBottom: '8px' }}>
+              {placedItems.find(i => i.id === deleteConfirmId)?.emoji}
+            </p>
+            <p style={{ color: '#fff', fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>
+              アイテムを削除しますか？
+            </p>
+            <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: '12px', marginBottom: '20px' }}>
+              この操作は元に戻せません
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                style={{
+                  flex: 1, padding: '11px', fontSize: '14px',
+                  color: 'rgba(255,255,255,0.5)',
+                  border: '1px solid rgba(255,255,255,0.12)', borderRadius: '24px',
+                }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  setPlacedItems(prev => prev.filter(i => i.id !== deleteConfirmId))
+                  setDeleteConfirmId(null)
+                }}
+                style={{
+                  flex: 1, padding: '11px', fontSize: '14px', fontWeight: 600,
+                  color: '#fff', background: '#ef4444', borderRadius: '24px',
+                }}
+              >
+                削除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -493,14 +772,12 @@ function strokeLine(ctx: CanvasRenderingContext2D, a: Pt, b: Pt) {
 function drawAIAvatar(ctx: CanvasRenderingContext2D, x: number, y: number, selectedEmoji?: string) {
   const r = 28
 
-  // Outer glow
   const grd = ctx.createRadialGradient(x, y, 0, x, y, r * 2.6)
   grd.addColorStop(0, 'rgba(167,139,250,0.38)')
   grd.addColorStop(1, 'rgba(83,74,183,0)')
   ctx.beginPath(); ctx.arc(x, y, r * 2.6, 0, Math.PI * 2)
   ctx.fillStyle = grd; ctx.fill()
 
-  // Background circle
   const bgGrd = ctx.createRadialGradient(x - r * 0.22, y - r * 0.22, 0, x, y, r)
   bgGrd.addColorStop(0, '#b39dfa')
   bgGrd.addColorStop(1, '#6d28d9')
@@ -508,7 +785,6 @@ function drawAIAvatar(ctx: CanvasRenderingContext2D, x: number, y: number, selec
   ctx.fillStyle = bgGrd; ctx.fill()
 
   ctx.save()
-  // Clip subsequent drawing to circle
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip()
 
   if (selectedEmoji) {
@@ -517,13 +793,10 @@ function drawAIAvatar(ctx: CanvasRenderingContext2D, x: number, y: number, selec
     ctx.textBaseline = 'middle'
     ctx.fillText(selectedEmoji, x, y + 2)
   } else {
-    // Human silhouette (Lucide User-style: head + shoulders)
     ctx.fillStyle = 'rgba(255,255,255,0.88)'
-    // Head
     ctx.beginPath()
     ctx.arc(x, y - r * 0.30, r * 0.33, 0, Math.PI * 2)
     ctx.fill()
-    // Shoulders / body — rounded trapezoid
     ctx.beginPath()
     ctx.moveTo(x - r * 0.58, y + r * 1.05)
     ctx.quadraticCurveTo(x - r * 0.58, y + r * 0.16, x - r * 0.30, y + r * 0.16)
@@ -535,4 +808,3 @@ function drawAIAvatar(ctx: CanvasRenderingContext2D, x: number, y: number, selec
 
   ctx.restore()
 }
-
