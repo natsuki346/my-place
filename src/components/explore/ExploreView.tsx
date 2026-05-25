@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps'
+import { useState, useEffect, useRef } from 'react'
 
 // ── Period ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +25,7 @@ const MAP_THEME: Record<Period, Theme> = {
 
 // ── City data ─────────────────────────────────────────────────────────────────
 
-const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
+const MAP_IMG = 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/World_map_-_low_resolution.svg/2560px-World_map_-_low_resolution.svg.png'
 
 type City = { name: string; coordinates: [number, number]; tag: string }
 
@@ -65,86 +64,182 @@ const USERS = [
 
 // ── Map tab ───────────────────────────────────────────────────────────────────
 
+type Xform = { scale: number; tx: number; ty: number }
+
 function MapTab({ t }: { t: Theme }) {
   const [selectedCity, setSelectedCity] = useState<City | null>(null)
+  const [xform,        setXform]        = useState<Xform>({ scale: 1, tx: 0, ty: 0 })
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const xformRef     = useRef<Xform>({ scale: 1, tx: 0, ty: 0 })
+  const didDragRef   = useRef(false)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    let isPinching = false, isPanning = false
+    let pinchDist0 = 0, pinchScale0 = 1
+    let panX0 = 0, panY0 = 0, panTx0 = 0, panTy0 = 0
+    let lastTap = 0
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        isPinching = true; isPanning = false
+        pinchDist0 = Math.hypot(
+          e.touches[1].clientX - e.touches[0].clientX,
+          e.touches[1].clientY - e.touches[0].clientY,
+        )
+        pinchScale0 = xformRef.current.scale
+      } else if (e.touches.length === 1) {
+        const now = Date.now()
+        if (now - lastTap < 280) {
+          const reset = { scale: 1, tx: 0, ty: 0 }
+          xformRef.current = reset; setXform(reset); setSelectedCity(null)
+          lastTap = 0; isPanning = false; return
+        }
+        lastTap = now
+        isPanning = true; isPinching = false; didDragRef.current = false
+        panX0  = e.touches[0].clientX; panY0  = e.touches[0].clientY
+        panTx0 = xformRef.current.tx;  panTy0 = xformRef.current.ty
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault()
+      if (e.touches.length === 2 && isPinching) {
+        const dist = Math.hypot(
+          e.touches[1].clientX - e.touches[0].clientX,
+          e.touches[1].clientY - e.touches[0].clientY,
+        )
+        const s = Math.min(4, Math.max(1, pinchScale0 * dist / pinchDist0))
+        xformRef.current = { ...xformRef.current, scale: s }
+        setXform({ ...xformRef.current })
+      } else if (e.touches.length === 1 && isPanning) {
+        const dx = e.touches[0].clientX - panX0
+        const dy = e.touches[0].clientY - panY0
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) didDragRef.current = true
+        xformRef.current = { ...xformRef.current, tx: panTx0 + dx, ty: panTy0 + dy }
+        setXform({ ...xformRef.current })
+      }
+    }
+
+    const onTouchEnd = () => { isPinching = false; isPanning = false }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    el.addEventListener('touchend',   onTouchEnd)
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove',  onTouchMove)
+      el.removeEventListener('touchend',   onTouchEnd)
+    }
+  }, [])
+
+  // Forward transform: city lon/lat → screen position for the bubble
+  const bubPos = (() => {
+    if (!selectedCity || !containerRef.current) return null
+    const rect = containerRef.current.getBoundingClientRect()
+    if (!rect.width) return null
+    const { scale, tx, ty } = xform
+    const W = rect.width, H = rect.height
+    const localX = (selectedCity.coordinates[0] + 180) / 360 * W
+    const localY = (90 - selectedCity.coordinates[1]) / 180 * H
+    const screenX = (localX - W / 2) * scale + W / 2 + tx
+    const screenY = (localY - H / 2) * scale + H / 2 + ty
+    if (screenX < 0 || screenX > W || screenY < 20 || screenY > H) return null
+    return { x: Math.min(Math.max(screenX, 60), W - 60), y: screenY }
+  })()
 
   return (
-    <div className="flex-1 relative overflow-hidden" style={{ background: '#0f1e35' }}>
-      <ComposableMap
-        projectionConfig={{ scale: 130 }}
-        style={{ width: '100%', height: '100%' }}
-      >
-        <ZoomableGroup>
-          <Geographies geography={GEO_URL}>
-            {({ geographies }: { geographies: unknown[] }) =>
-              geographies.map((geo, i) => (
-                <Geography
-                  key={i}
-                  geography={geo}
-                  fill="#2a4a6b"
-                  stroke="#3a6b8a"
-                  strokeWidth={0.5}
-                  style={{
-                    default:  { outline: 'none' },
-                    hover:    { outline: 'none', fill: '#3a5f80' },
-                    pressed:  { outline: 'none' },
-                  }}
-                />
-              ))
-            }
-          </Geographies>
-
-          {CITIES.map((city) => (
-            <Marker
-              key={city.name}
-              coordinates={city.coordinates}
-              onClick={() => setSelectedCity(selectedCity?.name === city.name ? null : city)}
-            >
-              <circle r={5} fill={t.dot} className="animate-pulse" style={{ cursor: 'pointer' }} />
-            </Marker>
-          ))}
-
-          {/* Bubble rendered in SVG space at selected city */}
-          {selectedCity && (
-            <Marker coordinates={selectedCity.coordinates}>
-              <g transform="translate(-52,-68)">
-                <rect rx={10} ry={10} width={104} height={44}
-                  fill="white" style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.3))' }} />
-                <text x={52} y={18} textAnchor="middle"
-                  style={{ fontSize: '10px', fontWeight: 700, fill: '#1f2937', fontFamily: 'system-ui' }}>
-                  {selectedCity.tag}
-                </text>
-                <text x={52} y={34} textAnchor="middle"
-                  style={{ fontSize: '9px', fill: '#6b7280', fontFamily: 'system-ui' }}>
-                  {selectedCity.name}
-                </text>
-                {/* caret */}
-                <polygon points="46,44 58,44 52,54" fill="white" />
-              </g>
-            </Marker>
-          )}
-        </ZoomableGroup>
-      </ComposableMap>
-
+    <div
+      ref={containerRef}
+      className="flex-1 relative overflow-hidden"
+      style={{ touchAction: 'none', background: '#0f1e35' }}
+    >
+      {/* ── Pan/zoom wrapper ──────────────────────────────────────── */}
       <div
         style={{
-          position: 'absolute', bottom: '14px', left: '50%',
-          transform: 'translateX(-50%)',
-          pointerEvents: 'none',
+          position: 'absolute', inset: 0,
+          transform: `translate(${xform.tx}px,${xform.ty}px) scale(${xform.scale})`,
+          transformOrigin: 'center center',
+          willChange: 'transform',
         }}
       >
-        <span
+        <img
+          src={MAP_IMG}
+          alt=""
+          draggable={false}
+          style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block', userSelect: 'none', pointerEvents: 'none' }}
+        />
+
+        {/* City dots – positioned by equirectangular lon/lat */}
+        {CITIES.map((city) => {
+          const left = (city.coordinates[0] + 180) / 360 * 100
+          const top  = (90 - city.coordinates[1]) / 180 * 100
+          return (
+            <div
+              key={city.name}
+              onClick={() => { if (!didDragRef.current) setSelectedCity(selectedCity?.name === city.name ? null : city) }}
+              style={{
+                position: 'absolute',
+                left: `${left}%`,
+                top:  `${top}%`,
+                transform: 'translate(-50%,-50%)',
+                cursor: 'pointer',
+                zIndex: 2,
+              }}
+            >
+              <div style={{
+                width: 10, height: 10, borderRadius: '50%',
+                background: t.dot,
+                boxShadow: `0 0 8px ${t.dot}`,
+              }} />
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ── Bubble overlay (screen coords, outside transform) ─────── */}
+      {bubPos && selectedCity && (
+        <div
           style={{
-            fontSize: '11px',
-            color: 'rgba(255,255,255,0.65)',
-            background: 'rgba(0,0,0,0.28)',
-            backdropFilter: 'blur(8px)',
-            padding: '4px 14px',
-            borderRadius: '20px',
-            whiteSpace: 'nowrap',
+            position: 'absolute',
+            left: `${bubPos.x}px`,
+            top:  `${bubPos.y - 62}px`,
+            transform: 'translateX(-50%)',
+            zIndex: 10,
+            pointerEvents: 'none',
           }}
         >
-          ピンチ&ドラッグで操作
+          <div style={{
+            background: 'white', borderRadius: '12px',
+            padding: '8px 14px',
+            boxShadow: '0 6px 24px rgba(0,0,0,0.28)',
+            whiteSpace: 'nowrap',
+          }}>
+            <p style={{ fontSize: '12px', fontWeight: 700, color: '#1f2937' }}>{selectedCity.tag}</p>
+            <p style={{ fontSize: '10px', color: '#6b7280', marginTop: '2px' }}>{selectedCity.name}</p>
+          </div>
+          <div style={{
+            position: 'absolute', bottom: '-8px', left: '50%',
+            transform: 'translateX(-50%)',
+            width: 0, height: 0,
+            borderLeft: '7px solid transparent',
+            borderRight: '7px solid transparent',
+            borderTop: '9px solid white',
+          }} />
+        </div>
+      )}
+
+      {/* ── Hint ─────────────────────────────────────────────────── */}
+      <div style={{ position: 'absolute', bottom: '14px', left: '50%', transform: 'translateX(-50%)', pointerEvents: 'none' }}>
+        <span style={{
+          fontSize: '11px', color: 'rgba(255,255,255,0.65)',
+          background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(8px)',
+          padding: '4px 14px', borderRadius: '20px', whiteSpace: 'nowrap',
+        }}>
+          ダブルタップでリセット
         </span>
       </div>
     </div>
