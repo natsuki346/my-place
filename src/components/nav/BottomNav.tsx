@@ -50,7 +50,7 @@ export function BottomNav({ current, onChange }: Props) {
       style={{ height: '56px' }}
     >
       {TABS.map(({ key, Icon, label }) => {
-        const active = current === key
+        const active: boolean = current === key
         return (
           <button
             key={key}
@@ -62,7 +62,7 @@ export function BottomNav({ current, onChange }: Props) {
             {active && (
               <div className={`absolute top-0 left-0 right-0 h-0.5 ${activeIndicator}`} />
             )}
-            <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+            <Icon size={20} strokeWidth={(active ?? false) ? 2.2 : 1.8} />
             <span className="text-[10px]" style={{ fontWeight: active ? 600 : 400 }}>
               {label}
             </span>
