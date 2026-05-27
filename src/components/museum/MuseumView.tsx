@@ -9,15 +9,18 @@ type Period    = 'morning' | 'afternoon' | 'evening' | 'night'
 type MuseumTab = 'museum' | 'profile'
 type Pose      = 'stand' | 'arms' | 'onehand' | 'sit'
 
-type DecoItem = {
-  id:      string
-  kind:    'tag' | 'emoji'
-  content: string
-  x:       number
-  y:       number
-  size:    number
-  color:   string
+type Item = {
+  id:       string
+  kind:     'tag' | 'emoji' | 'avatar'
+  content:  string
+  x:        number
+  y:        number
+  size:     number
+  color?:   string
+  pose?:    Pose
 }
+
+type CanvasData = { id: number; items: Item[] }
 
 type DragState      = { id: string; ox: number; oy: number; startX: number; startY: number }
 type SheetSelection = { kind: 'tag' | 'emoji'; content: string }
@@ -40,10 +43,9 @@ const TAB_ACTIVE_COLOR: Record<Period, string> = {
 const IDENTITY_TAGS  = ['#夜型', '#音楽好き', '#猫派', '#インドア', '#映画', '#読書', '#ゲーマー', '#アート', '#旅行', '#コーヒー']
 const EMOJI_STAMPS   = ['🎵', '⭐', '🌙', '🎨', '🌸', '💫', '🎮', '📚', '🎭', '🌈', '🔥', '💎', '🎪', '🌊', '🦋', '🎸']
 const TAG_COLORS     = ['#6d28d9', '#db2777', '#2563eb', '#16a34a', '#ea580c', '#111827']
+const PROFILE_TAGS   = ['#夜型', '#音楽好き', '#猫派', '#インドア']
 const INITIAL_TAGS   = ['#音楽', '#夜型', '#猫好き']
 const INITIAL_EMOJIS = ['🎵', '⭐', '🌙']
-
-const PROFILE_TAGS = ['#夜型', '#音楽好き', '#猫派', '#インドア']
 
 const HEADER_GRADIENT: Record<Period, string> = {
   morning:   'linear-gradient(155deg, #0ea5e9 0%, #ffd080 100%)',
@@ -59,47 +61,60 @@ const CANVAS_FRAME: React.CSSProperties = {
   position: 'relative', overflow: 'hidden',
 }
 
+const POSE_LABELS: Record<Pose, string> = {
+  stand: '通常', arms: '両手', onehand: '片手', sit: '座り',
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MuseumView() {
   const [hour,           setHour]           = useState(0)
   const [period,         setPeriod]         = useState<Period>('night')
-  const [decoItems,      setDecoItems]      = useState<DecoItem[]>([])
+  const [canvases,       setCanvases]       = useState<CanvasData[]>([])
   const [activeTab,      setActiveTab]      = useState<MuseumTab>('museum')
   const [activeCanvas,   setActiveCanvas]   = useState(0)
   const [isSheetOpen,    setIsSheetOpen]    = useState(false)
-  const [selectedPose,   setSelectedPose]   = useState<Pose>('stand')
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [sheetSel,       setSheetSel]       = useState<SheetSelection | null>(null)
 
-  const canvasRef      = useRef<HTMLDivElement>(null)
-  const carouselPtrX   = useRef<number | null>(null)
-  const dragState      = useRef<DragState | null>(null)
-  const didDrag        = useRef(false)
-  const decoItemsRef   = useRef<DecoItem[]>([])
-  decoItemsRef.current = decoItems
+  const canvasRefs     = useRef<(HTMLDivElement | null)[]>([null, null, null])
+  const activeCanvasRef = useRef(0)
+  activeCanvasRef.current = activeCanvas
+
+  const carouselPtrX  = useRef<number | null>(null)
+  const dragState     = useRef<DragState | null>(null)
+  const didDrag       = useRef(false)
+  const canvasesRef   = useRef<CanvasData[]>([])
+  canvasesRef.current = canvases
 
   useEffect(() => {
     const h = new Date().getHours()
     setHour(h)
     setPeriod(getPeriod(h))
-    setDecoItems([
-      ...INITIAL_TAGS.map((content, i) => ({
-        id: `tag-${i}`, kind: 'tag' as const, content,
-        x: 10 + Math.random() * 44, y: 8 + Math.random() * 40,
-        size: 13, color: '#6d28d9',
-      })),
-      ...INITIAL_EMOJIS.map((content, i) => ({
-        id: `emoji-${i}`, kind: 'emoji' as const, content,
-        x: 18 + Math.random() * 58, y: 52 + Math.random() * 32,
-        size: 22, color: '#000',
-      })),
-    ])
+
+    setCanvases([0, 1, 2].map(cid => ({
+      id: cid,
+      items: [
+        { id: `avatar-${cid}`, kind: 'avatar', content: '', x: 50, y: 45, size: 80, pose: 'stand' },
+        ...(cid === 0 ? [
+          ...INITIAL_TAGS.map((content, i) => ({
+            id: `tag-${i}`, kind: 'tag' as const, content,
+            x: 10 + Math.random() * 44, y: 8 + Math.random() * 40,
+            size: 13, color: '#6d28d9',
+          })),
+          ...INITIAL_EMOJIS.map((content, i) => ({
+            id: `emoji-${i}`, kind: 'emoji' as const, content,
+            x: 18 + Math.random() * 58, y: 52 + Math.random() * 32,
+            size: 22, color: '#000',
+          })),
+        ] : []),
+      ],
+    })))
   }, [])
 
   // ── Carousel swipe ─────────────────────────────────────────────
   const onCarouselDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('[data-deco-id]')) return
+    if ((e.target as HTMLElement).closest('[data-item-id]')) return
     carouselPtrX.current = e.clientX
   }
   const onCarouselUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -107,20 +122,22 @@ export function MuseumView() {
     const dx = e.clientX - carouselPtrX.current
     carouselPtrX.current = null
     if (Math.abs(dx) < 40) return
+    setSelectedItemId(null)
     setActiveCanvas(prev => dx < 0 ? Math.min(2, prev + 1) : Math.max(0, prev - 1))
   }
 
   // ── Canvas item drag ────────────────────────────────────────────
-  const onCanvasDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const el = (e.target as HTMLElement).closest('[data-deco-id]') as HTMLElement | null
+  const onCanvasDown = (e: React.PointerEvent<HTMLDivElement>, ci: number) => {
+    const el = (e.target as HTMLElement).closest('[data-item-id]') as HTMLElement | null
     if (!el) { setSelectedItemId(null); return }
     e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
 
-    const id   = el.dataset.decoId!
-    const item = decoItemsRef.current.find(d => d.id === id)
+    const id   = el.dataset.itemId!
+    const item = (canvasesRef.current[ci]?.items ?? []).find(d => d.id === id)
     if (!item) return
 
-    const rect = canvasRef.current!.getBoundingClientRect()
+    const rect = canvasRefs.current[ci]!.getBoundingClientRect()
     dragState.current = {
       id,
       ox:     ((e.clientX - rect.left) / rect.width)  * 100 - item.x,
@@ -131,18 +148,18 @@ export function MuseumView() {
     didDrag.current = false
   }
 
-  const onCanvasMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onCanvasMove = (e: React.PointerEvent<HTMLDivElement>, ci: number) => {
     if (!dragState.current) return
     const ds = dragState.current
     if (!didDrag.current) {
       if (Math.hypot(e.clientX - ds.startX, e.clientY - ds.startY) < 5) return
       didDrag.current = true
     }
-    const rect = canvasRef.current!.getBoundingClientRect()
+    const rect = canvasRefs.current[ci]!.getBoundingClientRect()
     const nx = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width)  * 100 - ds.ox))
     const ny = Math.max(2, Math.min(98, ((e.clientY - rect.top)  / rect.height) * 100 - ds.oy))
-    setDecoItems(prev => prev.map(item =>
-      item.id === ds.id ? { ...item, x: nx, y: ny } : item
+    setCanvases(prev => prev.map((c, i) =>
+      i === ci ? { ...c, items: c.items.map(item => item.id === ds.id ? { ...item, x: nx, y: ny } : item) } : c
     ))
   }
 
@@ -156,34 +173,49 @@ export function MuseumView() {
   }
 
   // ── Item management ─────────────────────────────────────────────
+  const updateItem = (id: string, patch: Partial<Item>) => {
+    const ci = activeCanvasRef.current
+    setCanvases(prev => prev.map((c, i) =>
+      i === ci ? { ...c, items: c.items.map(item => item.id === id ? { ...item, ...patch } : item) } : c
+    ))
+  }
+
+  const deleteItem = (id: string) => {
+    const ci = activeCanvasRef.current
+    setCanvases(prev => prev.map((c, i) =>
+      i === ci ? { ...c, items: c.items.filter(item => item.id !== id) } : c
+    ))
+    setSelectedItemId(null)
+  }
+
   const selectInSheet = (kind: 'tag' | 'emoji', content: string) =>
     setSheetSel(prev => prev?.kind === kind && prev.content === content ? null : { kind, content })
 
   const insertSelectedItem = () => {
     if (!sheetSel) return
     const id = `${sheetSel.kind}-${Date.now()}`
-    setDecoItems(prev => [...prev, {
-      id, kind: sheetSel.kind, content: sheetSel.content,
-      x: 25 + Math.random() * 50, y: 25 + Math.random() * 50,
-      size: sheetSel.kind === 'tag' ? 13 : 22, color: '#6d28d9',
-    }])
+    const ci = activeCanvasRef.current
+    setCanvases(prev => prev.map((c, i) =>
+      i === ci ? {
+        ...c,
+        items: [...c.items, {
+          id, kind: sheetSel.kind, content: sheetSel.content,
+          x: 25 + Math.random() * 50, y: 25 + Math.random() * 50,
+          size: sheetSel.kind === 'tag' ? 13 : 22, color: '#6d28d9',
+        }],
+      } : c
+    ))
     setSelectedItemId(id)
     setIsSheetOpen(false)
     setSheetSel(null)
   }
 
-  const updateItem = (id: string, patch: Partial<DecoItem>) =>
-    setDecoItems(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item))
-
-  const deleteItem = (id: string) => {
-    setDecoItems(prev => prev.filter(item => item.id !== id))
-    setSelectedItemId(null)
-  }
-
   const closeSheet = () => { setIsSheetOpen(false); setSheetSel(null) }
 
-  const activeColor  = TAB_ACTIVE_COLOR[period]
-  const selectedItem = decoItems.find(d => d.id === selectedItemId) ?? null
+  const activeColor   = TAB_ACTIVE_COLOR[period]
+  const activeItems   = canvases[activeCanvas]?.items ?? []
+  const selectedItem  = activeItems.find(d => d.id === selectedItemId) ?? null
+  const profilePose   = canvases[0]?.items.find(d => d.kind === 'avatar')?.pose ?? 'stand'
 
   return (
     <div className="relative flex flex-col" style={{ height: '100%' }}>
@@ -224,113 +256,144 @@ export function MuseumView() {
               transform: `translateX(-${activeCanvas * (100 / 3)}%)`,
               transition: 'transform 0.3s ease-out',
             }}>
-              {/* Slide 0: avatar canvas */}
-              <div style={{ width: '33.333%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 16px' }}>
-                <div
-                  ref={canvasRef}
-                  style={CANVAS_FRAME}
-                  onPointerDown={onCanvasDown}
-                  onPointerMove={onCanvasMove}
-                  onPointerUp={onCanvasUp}
-                >
-                  {/* Avatar */}
-                  <div style={{ position: 'absolute', left: '50%', top: '46%', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
-                    <AvatarSVG pose={selectedPose} />
-                  </div>
+              {[0, 1, 2].map(ci => {
+                const items = canvases[ci]?.items ?? []
+                const isActive = ci === activeCanvas
+                const panelItem = isActive ? selectedItem : null
 
-                  {/* Deco items */}
-                  {decoItems.map(item => (
+                return (
+                  <div key={ci} style={{ width: '33.333%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 16px' }}>
                     <div
-                      key={item.id}
-                      data-deco-id={item.id}
-                      onClick={e => e.stopPropagation()}
-                      style={{
-                        position: 'absolute', left: `${item.x}%`, top: `${item.y}%`,
-                        transform: 'translate(-50%, -50%)',
-                        userSelect: 'none', cursor: 'grab', touchAction: 'none',
-                        zIndex: selectedItemId === item.id ? 5 : 1,
-                        outline: selectedItemId === item.id ? '2px dashed rgba(167,139,250,0.7)' : 'none',
-                        borderRadius: '4px',
-                      }}
+                      ref={el => { canvasRefs.current[ci] = el }}
+                      style={CANVAS_FRAME}
+                      onPointerDown={e => onCanvasDown(e, ci)}
+                      onPointerMove={e => onCanvasMove(e, ci)}
+                      onPointerUp={onCanvasUp}
                     >
-                      {item.kind === 'tag' ? (
-                        <span style={{
-                          display: 'block', fontSize: `${item.size}px`,
-                          background: 'rgba(167,139,250,0.12)', color: item.color,
-                          padding: '2px 8px', borderRadius: '10px',
-                          border: `1px solid ${item.color}55`,
-                          whiteSpace: 'nowrap', fontFamily: 'system-ui, sans-serif', fontWeight: 500,
-                        }}>{item.content}</span>
-                      ) : (
-                        <span style={{ fontSize: `${item.size}px`, lineHeight: 1, display: 'block' }}>{item.content}</span>
-                      )}
-                    </div>
-                  ))}
+                      {/* Items */}
+                      {items.map(item => {
+                        const isSelected = isActive && selectedItemId === item.id
+                        return (
+                          <div
+                            key={item.id}
+                            data-item-id={item.id}
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              position: 'absolute',
+                              left: `${item.x}%`, top: `${item.y}%`,
+                              transform: 'translate(-50%, -50%)',
+                              userSelect: 'none', cursor: 'grab', touchAction: 'none',
+                              zIndex: isSelected ? 6 : item.kind === 'avatar' ? 3 : 1,
+                              outline: isSelected ? '2px dashed rgba(167,139,250,0.7)' : 'none',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {item.kind === 'avatar' ? (
+                              <AvatarSVG pose={item.pose ?? 'stand'} scale={item.size / 96} />
+                            ) : item.kind === 'tag' ? (
+                              <span style={{
+                                display: 'block', fontSize: `${item.size}px`,
+                                background: 'rgba(167,139,250,0.12)', color: item.color ?? '#6d28d9',
+                                padding: '2px 8px', borderRadius: '10px',
+                                border: `1px solid ${item.color ?? '#6d28d9'}55`,
+                                whiteSpace: 'nowrap', fontFamily: 'system-ui, sans-serif', fontWeight: 500,
+                              }}>{item.content}</span>
+                            ) : (
+                              <span style={{ fontSize: `${item.size}px`, lineHeight: 1, display: 'block' }}>{item.content}</span>
+                            )}
+                          </div>
+                        )
+                      })}
 
-                  {/* ── In-canvas adjustment panel ─────────────── */}
-                  {selectedItem && (
-                    <div
-                      onPointerDown={e => e.stopPropagation()}
-                      onClick={e => e.stopPropagation()}
-                      style={{
-                        position: 'absolute', bottom: 0, left: 0, right: 0,
-                        background: 'rgba(5,4,14,0.82)', backdropFilter: 'blur(8px)',
-                        padding: '10px 12px', zIndex: 10,
-                      }}
-                    >
-                      <input
-                        type="range" min="12" max="48"
-                        value={selectedItem.size}
-                        onChange={e => updateItem(selectedItem.id, { size: Number(e.target.value) })}
-                        style={{ width: '100%', accentColor: '#a78bfa', display: 'block', marginBottom: selectedItem.kind === 'tag' ? '6px' : '8px' }}
-                      />
-                      {selectedItem.kind === 'tag' && (
-                        <div style={{ display: 'flex', gap: '5px', marginBottom: '8px', justifyContent: 'center' }}>
-                          {TAG_COLORS.map(c => (
+                      {/* In-canvas adjustment panel */}
+                      {panelItem && (
+                        <div
+                          onPointerDown={e => e.stopPropagation()}
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            position: 'absolute', bottom: 0, left: 0, right: 0,
+                            background: 'rgba(5,4,14,0.84)', backdropFilter: 'blur(8px)',
+                            padding: '10px 12px', zIndex: 10,
+                          }}
+                        >
+                          {/* Size slider */}
+                          <input
+                            type="range"
+                            min={panelItem.kind === 'avatar' ? 40 : 12}
+                            max={panelItem.kind === 'avatar' ? 160 : 48}
+                            value={panelItem.size}
+                            onChange={e => updateItem(panelItem.id, { size: Number(e.target.value) })}
+                            style={{ width: '100%', accentColor: '#a78bfa', display: 'block', marginBottom: '8px' }}
+                          />
+
+                          {/* Color picker (tags only) */}
+                          {panelItem.kind === 'tag' && (
+                            <div style={{ display: 'flex', gap: '5px', marginBottom: '8px', justifyContent: 'center' }}>
+                              {TAG_COLORS.map(c => (
+                                <button
+                                  key={c}
+                                  onClick={() => updateItem(panelItem.id, { color: c })}
+                                  style={{
+                                    width: '20px', height: '20px', borderRadius: '50%',
+                                    background: c, flexShrink: 0,
+                                    border: panelItem.color === c ? '2px solid white' : '2px solid transparent',
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Pose selector (avatar only) */}
+                          {panelItem.kind === 'avatar' && (
+                            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', marginBottom: '8px', scrollbarWidth: 'none' }}>
+                              {(['stand', 'arms', 'onehand', 'sit'] as Pose[]).map(pose => (
+                                <button
+                                  key={pose}
+                                  onClick={() => updateItem(panelItem.id, { pose })}
+                                  style={{
+                                    flexShrink: 0, width: '46px', height: '58px', borderRadius: '8px',
+                                    background: panelItem.pose === pose ? 'rgba(167,139,250,0.32)' : 'rgba(255,255,255,0.09)',
+                                    border: panelItem.pose === pose ? '1px solid rgba(167,139,250,0.6)' : '1px solid rgba(255,255,255,0.14)',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px',
+                                    transition: 'all 0.15s',
+                                  }}
+                                >
+                                  <AvatarSVG pose={pose} scale={0.3} />
+                                  <span style={{ fontSize: '8px', color: panelItem.pose === pose ? '#c4b5fd' : 'rgba(255,255,255,0.38)' }}>
+                                    {POSE_LABELS[pose]}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Buttons */}
+                          <div style={{ display: 'flex', gap: '8px' }}>
                             <button
-                              key={c}
-                              onClick={() => updateItem(selectedItem.id, { color: c })}
+                              onClick={() => setSelectedItemId(null)}
                               style={{
-                                width: '20px', height: '20px', borderRadius: '50%',
-                                background: c, flexShrink: 0,
-                                border: selectedItem.color === c ? '2px solid white' : '2px solid transparent',
+                                flex: 1, fontSize: '12px', padding: '5px', borderRadius: '6px',
+                                background: 'rgba(255,255,255,0.12)', color: 'white',
+                                border: '1px solid rgba(255,255,255,0.18)',
                               }}
-                            />
-                          ))}
+                            >完了</button>
+                            {panelItem.kind !== 'avatar' && (
+                              <button
+                                onClick={() => deleteItem(panelItem.id)}
+                                style={{
+                                  fontSize: '12px', padding: '5px 12px', borderRadius: '6px',
+                                  background: 'rgba(239,68,68,0.16)', color: '#f87171',
+                                  border: '1px solid rgba(239,68,68,0.26)',
+                                }}
+                              >🗑️</button>
+                            )}
+                          </div>
                         </div>
                       )}
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          onClick={() => setSelectedItemId(null)}
-                          style={{
-                            flex: 1, fontSize: '12px', padding: '5px', borderRadius: '6px',
-                            background: 'rgba(255,255,255,0.12)', color: 'white',
-                            border: '1px solid rgba(255,255,255,0.18)',
-                          }}
-                        >完了</button>
-                        <button
-                          onClick={() => deleteItem(selectedItem.id)}
-                          style={{
-                            fontSize: '12px', padding: '5px 12px', borderRadius: '6px',
-                            background: 'rgba(239,68,68,0.16)', color: '#f87171',
-                            border: '1px solid rgba(239,68,68,0.26)',
-                          }}
-                        >🗑️</button>
-                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Slide 1 */}
-              <div style={{ width: '33.333%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 16px' }}>
-                <EmptyCanvas />
-              </div>
-
-              {/* Slide 2 */}
-              <div style={{ width: '33.333%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 16px' }}>
-                <EmptyCanvas />
-              </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -339,7 +402,7 @@ export function MuseumView() {
             {[0, 1, 2].map(i => (
               <button
                 key={i}
-                onClick={() => setActiveCanvas(i)}
+                onClick={() => { setSelectedItemId(null); setActiveCanvas(i) }}
                 style={{
                   width: '6px', height: '6px', borderRadius: '50%',
                   background: i === activeCanvas ? 'white' : 'rgba(255,255,255,0.30)',
@@ -368,12 +431,11 @@ export function MuseumView() {
 
           {/* Body */}
           <div style={{ position: 'relative' }}>
-            {/* Avatar – overlapping header */}
+            {/* Avatar circle overlapping header */}
             <div style={{ position: 'absolute', top: '-36px', left: '16px' }}>
-              <ProfileAvatar pose={selectedPose} />
+              <ProfileAvatar pose={profilePose} />
             </div>
 
-            {/* Spacer row (height of avatar above the fold) */}
             <div style={{ height: '44px' }} />
 
             {/* User info */}
@@ -419,27 +481,25 @@ export function MuseumView() {
             <div style={{ padding: '16px 16px 0' }}>
               <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.45)', marginBottom: '10px', letterSpacing: '1.2px', textTransform: 'uppercase' }}>My Museum</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {[0, 1, 2].map(i => (
-                  <button
-                    key={i}
-                    onClick={() => setActiveTab('museum')}
-                    style={{
-                      aspectRatio: '3/4', width: '100%', borderRadius: '4px',
-                      background: 'white', border: '4px solid #c0c0c0',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.35), inset 0 0 0 1px #e8e8e8',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {i === 0 ? (
+                {[0, 1, 2].map(i => {
+                  const pose = canvases[i]?.items.find(d => d.kind === 'avatar')?.pose ?? 'stand'
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setActiveTab('museum')}
+                      style={{
+                        aspectRatio: '3/4', width: '100%', borderRadius: '4px',
+                        background: 'white', border: '4px solid #c0c0c0',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.35), inset 0 0 0 1px #e8e8e8',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                      }}
+                    >
                       <div style={{ transform: 'scale(0.42)', transformOrigin: 'center' }}>
-                        <AvatarSVG pose={selectedPose} />
+                        <AvatarSVG pose={pose} />
                       </div>
-                    ) : (
-                      <span style={{ fontSize: '18px', color: '#d1d5db' }}>＋</span>
-                    )}
-                  </button>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -455,8 +515,7 @@ export function MuseumView() {
                   key={i}
                   style={{
                     background: 'rgba(255,255,255,0.06)', borderRadius: '10px',
-                    padding: '12px', marginBottom: '8px',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    padding: '12px', marginBottom: '8px', border: '1px solid rgba(255,255,255,0.08)',
                   }}
                 >
                   <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, marginBottom: '5px' }}>{post.text}</div>
@@ -468,7 +527,7 @@ export function MuseumView() {
         </div>
       )}
 
-      {/* ── FAB (hidden while sheet is open) ─────────────────────── */}
+      {/* ── FAB ─────────────────────────────────────────────────── */}
       {activeTab === 'museum' && !isSheetOpen && (
         <button
           onClick={() => { setIsSheetOpen(true); setSelectedItemId(null) }}
@@ -477,8 +536,7 @@ export function MuseumView() {
             position: 'absolute', bottom: '68px', right: '20px',
             width: '48px', height: '48px', borderRadius: '50%',
             background: '#ec4899', color: 'white', fontSize: '22px',
-            boxShadow: '0 4px 14px rgba(236,72,153,0.55)',
-            zIndex: 40,
+            boxShadow: '0 4px 14px rgba(236,72,153,0.55)', zIndex: 40,
           }}
         >🎨</button>
       )}
@@ -493,11 +551,10 @@ export function MuseumView() {
             background: 'rgba(10,8,20,0.94)', backdropFilter: 'blur(18px)',
             borderTopLeftRadius: '20px', borderTopRightRadius: '20px',
             borderTop: '1px solid rgba(255,255,255,0.09)',
-            maxHeight: '70vh',
-            display: 'flex', flexDirection: 'column',
+            maxHeight: '70vh', display: 'flex', flexDirection: 'column',
           }}
         >
-          {/* Drag bar → close */}
+          {/* Drag bar */}
           <div
             onClick={closeSheet}
             style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px', cursor: 'pointer', flexShrink: 0 }}
@@ -507,7 +564,6 @@ export function MuseumView() {
 
           {/* Scrollable sections */}
           <div style={{ overflowY: 'auto', flex: 1 }}>
-
             {/* § Identity Tags */}
             <div style={{ paddingBottom: '14px' }}>
               <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', padding: '6px 16px', letterSpacing: '1.2px', textTransform: 'uppercase' }}>Identity Tags</div>
@@ -533,7 +589,7 @@ export function MuseumView() {
             </div>
 
             {/* § Emoji Stamps */}
-            <div style={{ paddingBottom: '14px' }}>
+            <div style={{ paddingBottom: '8px' }}>
               <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', padding: '0 16px 6px', letterSpacing: '1.2px', textTransform: 'uppercase' }}>Emoji Stamps</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '4px', padding: '0 16px' }}>
                 {EMOJI_STAMPS.map(em => {
@@ -552,31 +608,6 @@ export function MuseumView() {
                     >{em}</button>
                   )
                 })}
-              </div>
-            </div>
-
-            {/* § Avatar Pose */}
-            <div style={{ paddingBottom: '8px' }}>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', padding: '0 16px 6px', letterSpacing: '1.2px', textTransform: 'uppercase' }}>Avatar Pose</div>
-              <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', padding: '0 16px', scrollbarWidth: 'none' }}>
-                {(['stand', 'arms', 'onehand', 'sit'] as Pose[]).map(pose => (
-                  <button
-                    key={pose}
-                    onClick={() => setSelectedPose(pose)}
-                    style={{
-                      flexShrink: 0, width: '66px', height: '84px', borderRadius: '10px',
-                      background: selectedPose === pose ? 'rgba(167,139,250,0.18)' : 'rgba(255,255,255,0.05)',
-                      border: selectedPose === pose ? '1px solid rgba(167,139,250,0.42)' : '1px solid rgba(255,255,255,0.08)',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <AvatarSVG pose={pose} scale={0.45} />
-                    <span style={{ fontSize: '9px', color: selectedPose === pose ? '#c4b5fd' : 'rgba(255,255,255,0.32)' }}>
-                      {pose === 'stand' ? '通常' : pose === 'arms' ? '両手上げ' : pose === 'onehand' ? '片手上げ' : '座り'}
-                    </span>
-                  </button>
-                ))}
               </div>
             </div>
           </div>
@@ -616,14 +647,6 @@ function ProfileAvatar({ pose }: { pose: Pose }) {
       <div style={{ position: 'absolute', bottom: '-8px', left: '50%', transform: 'translateX(-50%)' }}>
         <AvatarSVG pose={pose} scale={0.7} />
       </div>
-    </div>
-  )
-}
-
-function EmptyCanvas() {
-  return (
-    <div style={{ ...CANVAS_FRAME, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <span style={{ fontSize: '36px', color: '#d1d5db' }}>＋</span>
     </div>
   )
 }
