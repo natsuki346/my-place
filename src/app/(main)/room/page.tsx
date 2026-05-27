@@ -1,37 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useWorldStore } from '@/store/useWorldStore'
-import { RoomCanvas, getCurrentThemeColors } from '@/components/room/RoomCanvas'
-import type { ThemeColors } from '@/components/room/RoomCanvas'
 import { DoorHall } from '@/components/world/DoorHall'
 import { ChatRoom } from '@/components/room/ChatRoom'
-import { AvatarChat } from '@/components/room/AvatarChat'
-import { ProfileView } from '@/components/profile/ProfileView'
 import { ExploreView } from '@/components/explore/ExploreView'
+import { MuseumView } from '@/components/museum/MuseumView'
 import { BottomNav } from '@/components/nav/BottomNav'
-
-type Period = 'morning' | 'afternoon' | 'evening' | 'night'
-function getPeriod(h: number): Period {
-  return h >= 5 && h < 11 ? 'morning' : h >= 11 && h < 17 ? 'afternoon' : h >= 17 && h < 22 ? 'evening' : 'night'
-}
 
 export default function RoomPage() {
   const { currentView, setView } = useWorldStore()
-  const [activeRoom,     setActiveRoom]     = useState<string | null>(null)
-  const [roomTab,        setRoomTab]        = useState<'room' | 'profile'>('room')
-  const [theme,          setTheme]          = useState<ThemeColors>(getCurrentThemeColors)
-  const [avatarChatOpen, setAvatarChatOpen] = useState(false)
-  const [period,         setPeriod]         = useState<Period>('night')
-
-  useEffect(() => {
-    setPeriod(getPeriod(new Date().getHours()))
-    const id = setInterval(() => {
-      setTheme(getCurrentThemeColors())
-      setPeriod(getPeriod(new Date().getHours()))
-    }, 60_000)
-    return () => clearInterval(id)
-  }, [])
+  const [activeRoom, setActiveRoom] = useState<string | null>(null)
 
   const handleViewChange = (v: typeof currentView) => {
     if (v !== 'world') setActiveRoom(null)
@@ -44,88 +23,35 @@ export default function RoomPage() {
     <div
       className="relative overflow-hidden select-none"
       style={{
-        width: '100vw',
-        height: '100dvh',
-        maxWidth: '390px',
-        margin: '0 auto',
+        width:      '100vw',
+        height:     '100dvh',
+        maxWidth:   '390px',
+        margin:     '0 auto',
         background: '#0a0812',
         fontFamily: 'system-ui, sans-serif',
       }}
     >
-      {/* ── Screen area ────────────────────────────────────────────── */}
+      {/* ── Screen area ──────────────────────────────────────────── */}
       <div
         className="overflow-hidden flex flex-col"
         style={{ height: showingChatRoom ? '100dvh' : 'calc(100dvh - 56px)' }}
       >
-        {currentView === 'room' && (
-          <>
-            {/* Room / Profile tab bar */}
-            {(() => {
-              const activeClass = {
-                morning:   'border-sky-500 text-sky-600',
-                afternoon: 'border-blue-500 text-blue-600',
-                evening:   'border-orange-500 text-orange-600',
-                night:     'border-purple-500 text-purple-600',
-              }[period]
-              return (
-                <div className="flex flex-shrink-0 bg-white">
-                  {(['room', 'profile'] as const).map((tab) => {
-                    const active = roomTab === tab
-                    return (
-                      <button
-                        key={tab}
-                        onClick={() => setRoomTab(tab)}
-                        className={`flex-1 transition-colors font-semibold border-b-2 ${
-                          active ? activeClass : 'text-gray-400 border-transparent'
-                        }`}
-                        style={{
-                          paddingTop: '14px',
-                          paddingBottom: '8px',
-                          fontSize: '16px',
-                          letterSpacing: '1px',
-                          textTransform: 'capitalize',
-                          background: 'white',
-                        }}
-                      >
-                        {tab === 'room' ? 'Room' : 'Profile'}
-                      </button>
-                    )
-                  })}
-                </div>
-              )
-            })()}
-
-            <div className="flex-1 min-h-0">
-              {roomTab === 'room' ? (
-                <RoomCanvas onAvatarClick={() => setAvatarChatOpen(true)} />
-              ) : (
-                <ProfileView theme={theme} />
-              )}
-            </div>
-          </>
-        )}
-
-        {currentView === 'world' && (
-          <DoorHall onEnterRoom={(key) => setActiveRoom(key)} />
-        )}
-
+        {currentView === 'museum'  && <MuseumView />}
+        {currentView === 'world'   && <DoorHall onEnterRoom={(key) => setActiveRoom(key)} />}
         {currentView === 'explore' && <ExploreView />}
       </div>
 
-      {/* ── Bottom navigation ──────────────────────────────────────── */}
+      {/* ── Bottom navigation ────────────────────────────────────── */}
       {!showingChatRoom && (
         <BottomNav current={currentView} onChange={handleViewChange} />
       )}
 
-      {/* ── ChatRoom full-screen overlay ───────────────────────────── */}
+      {/* ── ChatRoom full-screen overlay ─────────────────────────── */}
       {showingChatRoom && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 50 }}>
           <ChatRoom roomKey={activeRoom} onBack={() => setActiveRoom(null)} />
         </div>
       )}
-
-      {/* ── AvatarChat full-screen overlay ─────────────────────────── */}
-      {avatarChatOpen && <AvatarChat onClose={() => setAvatarChatOpen(false)} />}
     </div>
   )
 }

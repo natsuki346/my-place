@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Home, Map, Compass } from 'lucide-react'
+import { Frame, Map, Compass } from 'lucide-react'
 import type { AppView } from '@/store/useWorldStore'
 
 type Period = 'morning' | 'afternoon' | 'evening' | 'night'
@@ -11,7 +11,7 @@ function getPeriod(h: number): Period {
 }
 
 const TABS: { key: AppView; Icon: React.FC<{ size?: number; strokeWidth?: number }>; label: string }[] = [
-  { key: 'room',    Icon: Home,    label: 'MyRoom' },
+  { key: 'museum',  Icon: Frame,   label: 'Museum' },
   { key: 'world',   Icon: Map,     label: 'World'  },
   { key: 'explore', Icon: Compass, label: 'Explore' },
 ]

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type AppView = 'room' | 'world' | 'explore'
+export type AppView = 'museum' | 'world' | 'explore'
 
 type Post = {
   id: string
@@ -25,7 +25,7 @@ type WorldStore = {
 }
 
 export const useWorldStore = create<WorldStore>((set) => ({
-  currentView: 'room',
+  currentView: 'museum',
   setView: (v) => set({ currentView: v }),
   playerPos: { x: 4, y: 3 },
   setPlayerPos: (pos) => set({ playerPos: pos }),
