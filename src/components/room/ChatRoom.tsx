@@ -1,15 +1,17 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createAvatar } from '@dicebear/core'
+import { adventurer } from '@dicebear/collection'
 
 // ── Period & Theme ────────────────────────────────────────────────────────────
 
 type Period = 'morning' | 'afternoon' | 'evening' | 'night'
 
 function getPeriod(hour: number): Period {
-  if (hour >= 22 || hour < 5) return 'night'
+  if (hour >= 18 || hour < 5) return 'night'
   if (hour < 11) return 'morning'
-  if (hour < 17) return 'afternoon'
+  if (hour < 15) return 'afternoon'
   return 'evening'
 }
 
@@ -141,6 +143,13 @@ type CommentItem = {
   time: string
 }
 
+type ViewingUser = {
+  name: string
+  bio: string
+  tags: string[]
+  color: string
+} | null
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ROOM_META: Record<string, RoomMeta> = {
@@ -246,6 +255,19 @@ const TIMELINE_POSTS: Record<string, TimelinePost[]> = {
   ],
 }
 
+const dummyProfiles: Record<string, { bio: string; tags: string[]; color: string }> = {
+  umi:  { bio: '海と本が好き🌊 充電中はひとりの時間大切に',  tags: ['#充電中', '#読書', '#内向型', '#海好き'],        color: '#3B82F6' },
+  haru: { bio: 'カフェ巡りが趣味☕ ひとり時間を愛してます',   tags: ['#ひとり時間', '#カフェ', '#内向型'],             color: '#10B981' },
+  sora: { bio: '読書と音楽で生きてる🎵',                     tags: ['#充電中', '#読書', '#音楽好き', '#内向型'],      color: '#8B5CF6' },
+  kiri: { bio: '内向型あるあるを発信中',                      tags: ['#読書', '#内向型', '#インドア'],                 color: '#F59E0B' },
+}
+
+const ALL_PARTICIPANT_NAMES = ['umi','haru','sora','kiri','mao','ren','yuki','tomo','nana','kai','riku','sara','jin','mei','ryo']
+const ALL_PARTICIPANT_TAGS  = ['#充電中','#読書','#内向型','#ひとり時間','#音楽好き','#カフェ','#夜型','#HSP','#共感疲労','#インドア']
+
+const MY_TAGS          = ['#充電中', '#読書', '#夜型', '#内向型', '#音楽好き']
+const MY_IDENTITY_TAGS = ['#夜型', '#音楽好き', '#猫派', '#インドア']
+
 const MOCK_COMMENTS: CommentItem[] = [
   { id: '1', user: 'kaze', color: '#818cf8', text: 'わかりすぎる', time: '今' },
   { id: '2', user: 'suki', color: '#f472b6', text: '毎日そう思ってる', time: '1分前' },
@@ -285,6 +307,12 @@ export function ChatRoom({ roomKey, onBack }: Props) {
   const [isPosting, setIsPosting]             = useState(false)
   const [newPostText, setNewPostText]         = useState('')
   const [selectedPostTag, setSelectedPostTag] = useState('')
+
+  // ── Profile sub-page state ───────────────────────────────────────
+  const [viewingUser, setViewingUser] = useState<ViewingUser>(null)
+
+  // ── Participants sub-page state ──────────────────────────────────
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false)
 
   // ── Chat state ───────────────────────────────────────────────────
   const [tab, setTab]           = useState<ChatTab>(hasTabs ? 'timeline' : 'chat')
@@ -381,6 +409,11 @@ export function ChatRoom({ roomKey, onBack }: Props) {
     setLikeMap(prev => ({ ...prev, [postId]: !prev[postId] }))
   }
 
+  const openUserProfile = (name: string) => {
+    const profile = dummyProfiles[name] ?? { bio: `${name}さん`, tags: [], color: '#a78bfa' }
+    setViewingUser({ name, ...profile })
+  }
+
   // ── Identity: subroom list view ──────────────────────────────────
   if (isIdentity && activeSubRoom === null) {
     const postTagOptions = subRooms.filter(s => s.id !== 'all').map(s => s.tag)
@@ -396,19 +429,18 @@ export function ChatRoom({ roomKey, onBack }: Props) {
         {/* Header */}
         <header
           className="flex items-center gap-3 px-4 flex-shrink-0"
-          style={{ height: '60px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}
+          style={{ height: '56px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}
         >
           <button onClick={onBack} style={{ color: t.accent, fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
-          <div className="flex-1 min-w-0 flex flex-col items-center gap-1">
-            <p style={{ color: t.text, fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
-            <span style={{ background: t.badgeBg, border: `1px solid ${t.badgeBorder}`, color: t.badgeText, fontSize: '10px', padding: '2px 8px', borderRadius: '10px' }}>
-              全員参加中のルーム
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <p className="flex-1 min-w-0 text-center" style={{ color: t.text, fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
+          <button
+            onClick={() => setIsParticipantsOpen(true)}
+            className="flex items-center gap-1.5 flex-shrink-0"
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+          >
             <span style={{ color: meta.dot, fontSize: '10px', animation: 'blink 1.4s ease-in-out infinite' }}>●</span>
-            <span style={{ color: t.subText, fontSize: '11px' }}>{meta.members}人がいる</span>
-          </div>
+            <span style={{ color: t.subText, fontSize: '11px', textDecoration: 'underline', textDecorationColor: `${t.subText}55` }}>{meta.members}人がいる</span>
+          </button>
         </header>
 
         {/* ルーム / タイムライン tabs */}
@@ -432,26 +464,29 @@ export function ChatRoom({ roomKey, onBack }: Props) {
         {/* Content */}
         <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
           {activeListTab === 'rooms' ? (
-            subRooms.map(sub =>
-              sub.id === 'all' ? (
-                <button key={sub.id} onClick={() => setActiveSubRoom(sub)} className="w-full flex items-center gap-3 text-left"
-                  style={{ padding: '16px', background: t.tagBg, borderBottom: `2px solid ${t.tagBorder}` }}>
-                  <span style={{ fontSize: '18px' }}>💬</span>
-                  <span style={{ flex: 1, color: t.text, fontSize: '15px', fontWeight: 600 }}>ALL</span>
-                  <span style={{ color: t.accent, fontSize: '12px' }}>{sub.memberCount.toLocaleString()}人</span>
-                </button>
-              ) : (
-                <button key={sub.id} onClick={() => setActiveSubRoom(sub)} className="w-full flex items-center gap-3 text-left"
-                  style={{ padding: '14px 16px', borderBottom: `1px solid ${t.cardBorder}` }}>
-                  <span style={{ color: t.accent, fontSize: '16px', fontWeight: 700 }}>#</span>
-                  <span style={{ flex: 1, color: t.text, fontSize: '14px' }}>
-                    {sub.tag.startsWith('#') ? sub.tag.slice(1) : sub.tag}
-                    {sub.isNew && <span style={{ marginLeft: '6px', color: t.accent, fontSize: '10px' }}>NEW</span>}
-                  </span>
-                  <span style={{ color: t.subText, fontSize: '11px' }}>{sub.memberCount.toLocaleString()}人</span>
-                </button>
-              )
-            )
+            <>
+              {/* Sub-rooms */}
+              {subRooms.map(sub =>
+                sub.id === 'all' ? (
+                  <button key={sub.id} onClick={() => setActiveSubRoom(sub)} className="w-full flex items-center gap-3 text-left"
+                    style={{ padding: '16px', background: t.tagBg, borderBottom: `2px solid ${t.tagBorder}` }}>
+                    <span style={{ fontSize: '18px' }}>💬</span>
+                    <span style={{ flex: 1, color: t.text, fontSize: '15px', fontWeight: 600 }}>ALL</span>
+                    <span style={{ color: t.accent, fontSize: '12px' }}>{sub.memberCount.toLocaleString()}人</span>
+                  </button>
+                ) : (
+                  <button key={sub.id} onClick={() => setActiveSubRoom(sub)} className="w-full flex items-center gap-3 text-left"
+                    style={{ padding: '14px 16px', borderBottom: `1px solid ${t.cardBorder}` }}>
+                    <span style={{ color: t.accent, fontSize: '16px', fontWeight: 700 }}>#</span>
+                    <span style={{ flex: 1, color: t.text, fontSize: '14px' }}>
+                      {sub.tag.startsWith('#') ? sub.tag.slice(1) : sub.tag}
+                      {sub.isNew && <span style={{ marginLeft: '6px', color: t.accent, fontSize: '10px' }}>NEW</span>}
+                    </span>
+                    <span style={{ color: t.subText, fontSize: '11px' }}>{sub.memberCount.toLocaleString()}人</span>
+                  </button>
+                )
+              )}
+            </>
           ) : (
             <>
               {/* ALL / フレンド toggle */}
@@ -475,6 +510,7 @@ export function ChatRoom({ roomKey, onBack }: Props) {
                   onToggleLike={() => toggleLike(post.id)}
                   commentCount={(commentMap[post.id] ?? MOCK_COMMENTS).length}
                   onComment={() => { setSelectedPost(post); setCommentInput('') }}
+                  onAvatarTap={() => openUserProfile(post.user)}
                   t={t}
                 />
               ))}
@@ -586,6 +622,18 @@ export function ChatRoom({ roomKey, onBack }: Props) {
             </div>
           </>
         )}
+
+        {/* Participants sub-page */}
+        <ParticipantsSubPage
+          isOpen={isParticipantsOpen}
+          onClose={() => setIsParticipantsOpen(false)}
+          totalLabel={meta.members}
+          t={t}
+          onViewUser={name => { openUserProfile(name) }}
+        />
+
+        {/* Profile sub-page overlay */}
+        <UserProfileSubPage user={viewingUser} onClose={() => setViewingUser(null)} t={t} />
       </div>
     )
   }
@@ -646,8 +694,8 @@ export function ChatRoom({ roomKey, onBack }: Props) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
         {tab === 'timeline'
-          ? <FriendTimelineView msgs={msgs} dot={meta.dot} t={t} />
-          : <ChatView msgs={msgs} aiTyping={aiTyping} bottomRef={bottomRef} t={t} />
+          ? <FriendTimelineView msgs={msgs} dot={meta.dot} t={t} onAvatarTap={openUserProfile} />
+          : <ChatView msgs={msgs} aiTyping={aiTyping} bottomRef={bottomRef} t={t} onAvatarTap={openUserProfile} />
         }
       </div>
 
@@ -664,6 +712,9 @@ export function ChatRoom({ roomKey, onBack }: Props) {
           </button>
         </div>
       )}
+
+      {/* Profile sub-page overlay */}
+      <UserProfileSubPage user={viewingUser} onClose={() => setViewingUser(null)} t={t} />
     </div>
   )
 }
@@ -677,17 +728,19 @@ type PostCardProps = {
   onToggleLike: () => void
   commentCount: number
   onComment: () => void
+  onAvatarTap: () => void
   t: PT
 }
 
-function PostCard({ post, liked, likeCount, onToggleLike, commentCount, onComment, t }: PostCardProps) {
+function PostCard({ post, liked, likeCount, onToggleLike, commentCount, onComment, onAvatarTap, t }: PostCardProps) {
   return (
     <div style={{ padding: '14px 16px', borderBottom: `1px solid ${t.cardBorder}`, background: t.cardBg, borderLeft: post.isFriend ? `2px solid ${post.color}` : undefined }}>
       <div className="flex items-center" style={{ gap: '8px' }}>
-        <div className="flex items-center justify-center flex-shrink-0"
-          style={{ width: '28px', height: '28px', borderRadius: '50%', background: post.color, fontSize: '11px', fontWeight: 700, color: '#fff' }}>
-          {post.user[0]}
-        </div>
+        <button onClick={onAvatarTap} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}>
+          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: post.color, fontSize: '11px', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {post.user[0]}
+          </div>
+        </button>
         <span style={{ color: t.subText, fontSize: '12px' }}>{post.user}</span>
         <span style={{ background: t.tagBg, color: t.tagText, fontSize: '10px', padding: '2px 8px', borderRadius: '10px', border: `1px solid ${t.tagBorder}`, flexShrink: 0 }}>{post.tag}</span>
         <span style={{ color: t.dimText, fontSize: '10px', marginLeft: 'auto', flexShrink: 0 }}>{post.time}</span>
@@ -709,16 +762,16 @@ function PostCard({ post, liked, likeCount, onToggleLike, commentCount, onCommen
 
 // ── Friend timeline view ──────────────────────────────────────────────────────
 
-function FriendTimelineView({ msgs, dot, t }: { msgs: Message[]; dot: string; t: PT }) {
+function FriendTimelineView({ msgs, dot, t, onAvatarTap }: { msgs: Message[]; dot: string; t: PT; onAvatarTap: (name: string) => void }) {
   const visible = msgs.filter(m => m.sender !== 'ai')
   return (
     <div className="px-4 py-3 space-y-3">
-      {visible.map(msg => <FriendTimelineCard key={msg.id} msg={msg} dot={dot} t={t} />)}
+      {visible.map(msg => <FriendTimelineCard key={msg.id} msg={msg} dot={dot} t={t} onAvatarTap={onAvatarTap} />)}
     </div>
   )
 }
 
-function FriendTimelineCard({ msg, dot, t }: { msg: Message; dot: string; t: PT }) {
+function FriendTimelineCard({ msg, dot, t, onAvatarTap }: { msg: Message; dot: string; t: PT; onAvatarTap: (name: string) => void }) {
   const [liked, setLiked] = useState(false)
   const [count, setCount] = useState(msg.likes ?? 0)
   const isMe = msg.sender === 'me'
@@ -726,7 +779,9 @@ function FriendTimelineCard({ msg, dot, t }: { msg: Message; dot: string; t: PT 
   return (
     <div style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: '12px', padding: '12px 14px' }}>
       <div className="flex items-center gap-2 mb-2">
-        <Avatar label={isMe ? 'me' : msg.sender.charAt(0).toUpperCase()} color={isMe ? t.accent : (msg.color ?? dot)} />
+        <button onClick={() => { if (!isMe) onAvatarTap(msg.sender) }} style={{ background: 'none', border: 'none', padding: 0, cursor: isMe ? 'default' : 'pointer' }}>
+          <Avatar label={isMe ? 'me' : msg.sender.charAt(0).toUpperCase()} color={isMe ? t.accent : (msg.color ?? dot)} />
+        </button>
         <span style={{ color: isMe ? t.accent : (msg.color ?? t.subText), fontSize: '12px', fontWeight: 600 }}>{isMe ? 'あなた' : msg.sender}</span>
         <span style={{ color: t.dimText, fontSize: '10px', marginLeft: 'auto' }}>{msg.timestamp}</span>
       </div>
@@ -744,10 +799,10 @@ function FriendTimelineCard({ msg, dot, t }: { msg: Message; dot: string; t: PT 
 
 // ── Chat view ─────────────────────────────────────────────────────────────────
 
-function ChatView({ msgs, aiTyping, bottomRef, t }: { msgs: Message[]; aiTyping: boolean; bottomRef: React.RefObject<HTMLDivElement | null>; t: PT }) {
+function ChatView({ msgs, aiTyping, bottomRef, t, onAvatarTap }: { msgs: Message[]; aiTyping: boolean; bottomRef: React.RefObject<HTMLDivElement | null>; t: PT; onAvatarTap: (name: string) => void }) {
   return (
     <div className="px-4 py-4 space-y-4">
-      {msgs.map(msg => <Bubble key={msg.id} msg={msg} t={t} />)}
+      {msgs.map(msg => <Bubble key={msg.id} msg={msg} t={t} onAvatarTap={onAvatarTap} />)}
       {aiTyping && <TypingIndicator t={t} />}
       <div ref={bottomRef} />
     </div>
@@ -771,7 +826,7 @@ function TypingIndicator({ t }: { t: PT }) {
 
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
-function Bubble({ msg, t }: { msg: Message; t: PT }) {
+function Bubble({ msg, t, onAvatarTap }: { msg: Message; t: PT; onAvatarTap: (name: string) => void }) {
   const isMe = msg.sender === 'me'
   const isAI = msg.sender === 'ai'
 
@@ -796,7 +851,9 @@ function Bubble({ msg, t }: { msg: Message; t: PT }) {
 
   return (
     <div className="flex gap-2 items-start">
-      <Avatar label={msg.sender.charAt(0).toUpperCase()} color={msg.color ?? t.accent} />
+      <button onClick={() => onAvatarTap(msg.sender)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+        <Avatar label={msg.sender.charAt(0).toUpperCase()} color={msg.color ?? t.accent} />
+      </button>
       <div>
         <p style={{ color: t.subText, fontSize: '10px', marginBottom: '2px' }}>{msg.sender}</p>
         <div style={{ background: t.bubbleOther, color: t.bubbleOtherText, borderRadius: '12px 12px 12px 2px', padding: '8px 12px', fontSize: '13px', maxWidth: '220px', lineHeight: '1.5', wordBreak: 'break-word' }}>{msg.text}</div>
@@ -811,6 +868,165 @@ function Avatar({ label, color }: { label: string; color: string }) {
     <div className="flex items-center justify-center flex-shrink-0"
       style={{ width: '24px', height: '24px', borderRadius: '50%', background: color, fontSize: '9px', fontWeight: 700, color: '#fff' }}>
       {label}
+    </div>
+  )
+}
+
+function DiceBearAvatar({ seed, size = 48, accentColor = '#a78bfa' }: { seed: string; size?: number; accentColor?: string }) {
+  const [svgString, setSvgString] = useState('')
+  useEffect(() => {
+    setSvgString(createAvatar(adventurer, { seed, backgroundColor: ['b6e3f4'] }).toString().replace('<svg ', '<svg width="100%" '))
+  }, [seed])
+  return (
+    <div
+      style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#b6e3f4', border: `2px solid ${accentColor}44` }}
+      dangerouslySetInnerHTML={{ __html: svgString }}
+    />
+  )
+}
+
+// ── Participants sub-page ─────────────────────────────────────────────────────
+
+function ParticipantsSubPage({ isOpen, onClose, totalLabel, t, onViewUser }: {
+  isOpen: boolean
+  onClose: () => void
+  totalLabel: string
+  t: PT
+  onViewUser: (name: string) => void
+}) {
+  const [search, setSearch] = useState('')
+  const [tags, setTags] = useState<Record<string, string[]>>({})
+
+  useEffect(() => {
+    const result: Record<string, string[]> = {}
+    for (const name of ALL_PARTICIPANT_NAMES) {
+      const count = 2 + Math.floor(Math.random() * 2)
+      const shuffled = [...ALL_PARTICIPANT_TAGS].sort(() => Math.random() - 0.5)
+      result[name] = shuffled.slice(0, count)
+    }
+    setTags(result)
+  }, [])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return ALL_PARTICIPANT_NAMES
+    return ALL_PARTICIPANT_NAMES.filter(name =>
+      name.toLowerCase().includes(q) ||
+      (tags[name] ?? []).some(tag => tag.toLowerCase().includes(q))
+    )
+  }, [search, tags])
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 60,
+      background: t.bg,
+      transform: `translateX(${isOpen ? '0%' : '100%'})`,
+      transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{ height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: t.headerBg, borderBottom: `1px solid ${t.border}`, gap: 8 }}>
+        <button onClick={onClose} style={{ color: t.accent, fontSize: '14px', background: 'none', border: 'none', cursor: 'pointer', minWidth: 60, textAlign: 'left' }}>← 戻る</button>
+        <span style={{ flex: 1, textAlign: 'center', color: t.text, fontSize: '14px', fontWeight: 600 }}>参加中 {totalLabel}人</span>
+        <span style={{ minWidth: 60 }} />
+      </div>
+      {/* Search */}
+      <div style={{ padding: '10px 16px', background: t.headerBg, borderBottom: `1px solid ${t.border}`, flexShrink: 0 }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="名前・タグで検索..."
+          style={{ width: '100%', background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: '20px', padding: '7px 14px', fontSize: '13px', color: t.inputText, outline: 'none', boxSizing: 'border-box' }}
+        />
+      </div>
+      {/* List */}
+      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '80px' }}>
+        {filtered.map(name => {
+          const userTags   = tags[name] ?? []
+          const commonTags = userTags.filter(tag => MY_IDENTITY_TAGS.includes(tag))
+          return (
+            <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', borderBottom: `1px solid ${t.border}` }}>
+              <DiceBearAvatar seed={name} size={40} accentColor={t.accent} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ color: t.text, fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>{name}</p>
+                <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+                  {commonTags.length > 0
+                    ? commonTags.map(tag => (
+                        <span key={tag} style={{ flexShrink: 0, fontSize: '10px', padding: '2px 8px', borderRadius: '10px', background: '#f3e8ff', color: '#7e22ce', border: '1px solid #d8b4fe', whiteSpace: 'nowrap' }}>{tag}</span>
+                      ))
+                    : <span style={{ fontSize: '10px', color: t.dimText }}>共通タグなし</span>
+                  }
+                </div>
+              </div>
+              <button
+                onClick={() => onViewUser(name)}
+                style={{ flexShrink: 0, fontSize: '12px', padding: '5px 12px', borderRadius: '14px', background: `${t.accent}18`, color: t.accent, border: `1px solid ${t.accent}44`, cursor: 'pointer' }}
+              >見る</button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function UserProfileSubPage({ user, onClose, t }: { user: ViewingUser; onClose: () => void; t: PT }) {
+  const commonCount = user ? user.tags.filter(tag => MY_TAGS.includes(tag)).length : 0
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 65,
+      background: t.bg,
+      transform: `translateX(${user ? '0%' : '100%'})`,
+      transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header bar */}
+      <div style={{ height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: t.headerBg, borderBottom: `1px solid ${t.border}`, gap: 8 }}>
+        <button onClick={onClose} style={{ color: t.accent, fontSize: '14px', background: 'none', border: 'none', cursor: 'pointer', minWidth: 60, textAlign: 'left' }}>← 戻る</button>
+        <span style={{ flex: 1 }} />
+        <button style={{ fontSize: '12px', color: t.accent, border: `1px solid ${t.accent}55`, borderRadius: '14px', padding: '4px 12px', background: `${t.accent}11`, cursor: 'pointer', flexShrink: 0 }}>つながる</button>
+      </div>
+      {/* Scrollable content */}
+      <div style={{ overflowY: 'auto', flex: 1, scrollbarWidth: 'none' }}>
+        {/* Color header */}
+        <div style={{ height: 100, background: user?.color ?? t.accent, flexShrink: 0 }} />
+        {/* Avatar overlapping header */}
+        <div style={{ position: 'relative', marginTop: -44, paddingLeft: 16, marginBottom: 10 }}>
+          <DiceBearAvatar seed={user?.name ?? ''} size={80} accentColor="rgba(255,255,255,0.9)" />
+        </div>
+        {/* Profile info */}
+        <div style={{ padding: '0 16px 24px' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: t.text, marginBottom: 2 }}>{user?.name ?? ''}</div>
+          <div style={{ fontSize: 12, color: t.subText, marginBottom: 10 }}>@{user?.name ?? ''}_user</div>
+          <div style={{ fontSize: 13, color: t.text, lineHeight: 1.6, marginBottom: 14 }}>{user?.bio ?? ''}</div>
+          {/* Identity tags */}
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', marginBottom: 16, paddingBottom: 2 }}>
+            {(user?.tags ?? []).map(tag => (
+              <span key={tag} style={{ flexShrink: 0, fontSize: 11, padding: '3px 10px', borderRadius: 12, background: t.tagBg, color: t.tagText, border: `1px solid ${t.tagBorder}`, whiteSpace: 'nowrap' }}>{tag}</span>
+            ))}
+          </div>
+          {/* Divider */}
+          <div style={{ height: 1, background: t.border, marginBottom: 14 }} />
+          {/* MY MUSEUM */}
+          <div style={{ fontSize: 10, fontWeight: 600, color: t.subText, marginBottom: 10, letterSpacing: '1.2px', textTransform: 'uppercase' }}>My Museum</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ aspectRatio: '3/4', width: '100%', borderRadius: 4, background: '#ffffff', border: '3px solid #c0c0c0', boxShadow: '0 2px 8px rgba(0,0,0,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <DiceBearAvatar seed={`${user?.name ?? 'x'}-${i}`} size={36} accentColor="transparent" />
+              </div>
+            ))}
+          </div>
+          {/* Common tags */}
+          {commonCount > 0 && (
+            <>
+              <div style={{ height: 1, background: t.border, marginBottom: 14 }} />
+              <div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>
+                あなたと{commonCount}つの共通タグ
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

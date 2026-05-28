@@ -7,9 +7,9 @@ import { useEffect, useRef, useState } from 'react'
 type Period = 'morning' | 'afternoon' | 'evening' | 'night'
 
 function getPeriod(hour: number): Period {
-  if (hour >= 22 || hour < 5) return 'night'
+  if (hour >= 18 || hour < 5) return 'night'
   if (hour < 11) return 'morning'
-  if (hour < 17) return 'afternoon'
+  if (hour < 15) return 'afternoon'
   return 'evening'
 }
 
@@ -60,17 +60,45 @@ const THEMES: Record<Period, Theme> = {
   },
 }
 
-// ── Door data ─────────────────────────────────────────────────────────────────
+// ── Door types & data ─────────────────────────────────────────────────────────
 
-const DOORS = [
-  { key: 'myroom',  label: '心の部屋',  sublabel: 'my space' },
-  { key: 'friend1', label: 'Hana',       sublabel: 'friend'   },
-  { key: 'friend2', label: 'Ryo',        sublabel: 'friend'   },
-  { key: 'id1',     label: '#内向型',    sublabel: '247人'    },
-  { key: 'id2',     label: '#夜型人間',  sublabel: '1.2k人'   },
-  { key: 'id3',     label: '#HSP',       sublabel: '892人'    },
-  { key: 'add',     label: '追加する',   sublabel: '新しい扉' },
+type DoorCustom = {
+  doorColor:       string   // ドア木材色
+  doorAccentColor: string   // フレーム・パネル色
+  labelBgColor:    string   // ラベル背景（#RRGGBBaa形式可）
+  labelTextColor:  string   // ラベルテキスト色
+  knobColor:       string   // ノブ色
+}
+
+type DoorRoom = { key: string; label: string; sublabel: string } & DoorCustom
+
+type CustomTab = 'door' | 'accent' | 'label' | 'knob'
+
+const DEFAULT_CUSTOM: DoorCustom = {
+  doorColor:       '#8B6343',
+  doorAccentColor: '#6B4C30',
+  labelBgColor:    '#1a0a00cc',
+  labelTextColor:  '#ffffff',
+  knobColor:       '#D4AF37',
+}
+
+const DEFAULT_DOORS: DoorRoom[] = [
+  { key: 'myroom',  label: '心の部屋',  sublabel: 'my space', ...DEFAULT_CUSTOM },
+  { key: 'friend1', label: 'Hana',       sublabel: 'friend',   ...DEFAULT_CUSTOM },
+  { key: 'friend2', label: 'Ryo',        sublabel: 'friend',   ...DEFAULT_CUSTOM },
+  { key: 'id1',     label: '#内向型',    sublabel: '247人',    ...DEFAULT_CUSTOM },
+  { key: 'id2',     label: '#夜型人間',  sublabel: '1.2k人',   ...DEFAULT_CUSTOM },
+  { key: 'id3',     label: '#HSP',       sublabel: '892人',    ...DEFAULT_CUSTOM },
+  { key: 'add',     label: '追加する',   sublabel: '新しい扉', ...DEFAULT_CUSTOM },
 ]
+
+const PRESET_DOOR_COLORS   = ['#8B6343','#5C3A1E','#2C1810','#4A7C59','#1a3a5c','#8B0000','#4A4A4A','#D4A853']
+const PRESET_ACCENT_COLORS = ['#6B4C30','#3D2010','#1a2a3c','#2d5a3d','#600000','#333333','#B8860B','#C0C0C0']
+const PRESET_LABEL_BG      = ['#000000cc','#1a1a2ecc','#2d0a0acc','#0a2d0acc','#2d2d00cc','#2d002dcc']
+const PRESET_LABEL_TEXT    = ['#ffffff','#FFD700','#FF69B4','#00CED1','#98FB98','#FFA07A']
+const PRESET_KNOB_COLORS   = ['#D4AF37','#C0C0C0','#CD7F32','#1a1a1a','#ffffff']
+
+const CUSTOMIZABLE_KEYS = new Set(['myroom', 'id1', 'id2', 'id3'])
 
 const TABS = [
   { key: 'all',      label: 'すべて' },
@@ -79,17 +107,38 @@ const TABS = [
 ]
 
 const TAB_FILTER: Record<string, string[]> = {
-  all:      DOORS.map(d => d.key),
+  all:      DEFAULT_DOORS.map(d => d.key),
   identity: ['id1', 'id2', 'id3', 'add'],
   friends:  ['myroom', 'friend1', 'friend2', 'add'],
 }
 
 const DOOR_W   = 130
-const DOOR_H   = 200
+const DOOR_H   = 210
 const DOOR_GAP = 150
 
-type Door = typeof DOORS[0]
+type Door = DoorRoom
 
+// ── Door SVG preview ──────────────────────────────────────────────────────────
+
+function DoorPreview({ custom, W: propW, H: propH }: { custom: DoorCustom; W?: number; H?: number }) {
+  const W = propW ?? 70, H = propH ?? 108
+  const fw = W + 10, fh = H + 10
+  const px = 5 + 8,  pw = W - 16
+  return (
+    <svg width={fw} height={fh} viewBox={`0 0 ${fw} ${fh}`} style={{ display: 'block', borderRadius: '4px' }}>
+      <rect x="0" y="0" width={fw} height={fh} fill={custom.doorAccentColor} rx="3" />
+      <rect x="5" y="5" width={W} height={H} fill={custom.doorColor} />
+      {[1,2,3,4].map(i => (
+        <line key={i} x1={5+W/5*i} y1="5" x2={5+W/5*i} y2={5+H} stroke="rgba(0,0,0,0.07)" strokeWidth="1" />
+      ))}
+      <rect x={px} y={5+20} width={pw} height={Math.floor(H*0.28)} fill="rgba(0,0,0,0.13)" rx="2" />
+      <rect x={px} y={5+20+Math.floor(H*0.28)+5} width={pw} height={Math.floor(H*0.36)} fill="rgba(0,0,0,0.13)" rx="2" />
+      <rect x={5+W/2-26} y={5+Math.floor(H*0.38)} width={52} height={19} fill={custom.labelBgColor} rx="4" />
+      <circle cx={5+W-10} cy={5+Math.floor(H*0.68)} r={5} fill={custom.knobColor} />
+      <circle cx={5+W-10} cy={5+Math.floor(H*0.68)} r={5} stroke={custom.doorAccentColor} strokeWidth="0.8" fill="none" />
+    </svg>
+  )
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -100,10 +149,15 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   const onEnterRef   = useRef(onEnterRoom)
   onEnterRef.current = onEnterRoom
 
-  const [activeTab,     setActiveTab]     = useState('all')
-  const [period,        setPeriod]        = useState<Period>('night')
-  const [favorites,     setFavorites]     = useState<string[]>([])
-  const [showFavorites, setShowFavorites] = useState(false)
+  const [activeTab,        setActiveTab]        = useState('all')
+  const [period,           setPeriod]           = useState<Period>('night')
+  const [favorites,        setFavorites]        = useState<string[]>([])
+  const [showFavorites,    setShowFavorites]    = useState(false)
+  const [doors,            setDoors]            = useState<DoorRoom[]>(DEFAULT_DOORS)
+  const [customizingDoorId, setCustomizingDoorId] = useState<string | null>(null)
+  const [draftCustom,      setDraftCustom]      = useState<DoorCustom>(DEFAULT_CUSTOM)
+  const [customTab,        setCustomTab]        = useState<CustomTab>('door')
+  const [isLibraryOpen,    setIsLibraryOpen]    = useState(false)
 
   const favoritesRef = useRef<string[]>([])
   favoritesRef.current = favorites
@@ -119,7 +173,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
     return () => clearInterval(id)
   }, [])
 
-  const filteredDoors = DOORS.filter(d => TAB_FILTER[activeTab].includes(d.key))
+  const filteredDoors = doors.filter(d => TAB_FILTER[activeTab].includes(d.key))
 
   const doorsRef   = useRef<Door[]>(filteredDoors)
   doorsRef.current = filteredDoors
@@ -325,7 +379,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   }
 
   return (
-    <div className={`flex flex-col bg-gradient-to-b ${theme.bg}`} style={{ height: '100%' }}>
+    <div className={`flex flex-col bg-gradient-to-b ${theme.bg}`} style={{ height: '100%', position: 'relative' }}>
       {/* ── Tab bar ───────────────────────────────────────────────── */}
       <div className="flex items-center justify-center gap-2 px-4 py-3 flex-shrink-0">
         {TABS.map(tab => {
@@ -334,8 +388,10 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                active ? `${tabActiveBg[period]} text-white` : 'text-white/60'
+              className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+                active
+                  ? `${tabActiveBg[period]} text-white font-bold`
+                  : theme.dark ? 'text-white/75 font-medium' : 'text-gray-800 font-medium'
               }`}
             >
               {tab.label}
@@ -345,7 +401,9 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
         <button
           onClick={() => setShowFavorites(true)}
           className={`px-3 py-1.5 rounded-full text-base transition-colors ${
-            favorites.length > 0 ? `${tabActiveBg[period]} text-white` : 'text-white/60'
+            favorites.length > 0
+              ? `${tabActiveBg[period]} text-white`
+              : theme.dark ? 'text-white/75' : 'text-gray-800'
           }`}
         >
           {favorites.length > 0 ? '⭐' : '☆'}
@@ -360,6 +418,156 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
           style={{ touchAction: 'none' }}
         />
       </div>
+
+      {/* ── 図鑑ボタン ───────────────────────────────────────────── */}
+      <div className="flex-shrink-0 flex justify-center py-2">
+        <button
+          onClick={() => setIsLibraryOpen(true)}
+          style={{ background: 'rgba(255,255,255,0.82)', borderRadius: '999px', padding: '7px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.14)', fontSize: '13px', fontWeight: 600, color: '#374151', display: 'flex', alignItems: 'center', gap: '6px', backdropFilter: 'blur(6px)' }}
+        >
+          📚 図鑑
+        </button>
+      </div>
+
+      {/* ── 図鑑サブ画面 ─────────────────────────────────────────── */}
+      <DoorLibrary
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        doors={doors}
+        onSaveDoor={(key, custom) => setDoors(prev => prev.map(d => d.key === key ? { ...d, ...custom } : d))}
+        theme={theme}
+      />
+
+      {/* ── Customize bottom sheet ──────────────────────────────── */}
+      {customizingDoorId && (() => {
+        const CUSTOM_TABS: { key: CustomTab; label: string }[] = [
+          { key: 'door',   label: 'ドア色' },
+          { key: 'accent', label: '装飾' },
+          { key: 'label',  label: 'ラベル' },
+          { key: 'knob',   label: 'ノブ' },
+        ]
+        const SWATCH_MAP: Record<CustomTab, string[]> = {
+          door:   PRESET_DOOR_COLORS,
+          accent: PRESET_ACCENT_COLORS,
+          label:  PRESET_LABEL_BG,
+          knob:   PRESET_KNOB_COLORS,
+        }
+        const FIELD_MAP: Record<CustomTab, keyof DoorCustom> = {
+          door:   'doorColor',
+          accent: 'doorAccentColor',
+          label:  'labelBgColor',
+          knob:   'knobColor',
+        }
+        const isDark = theme.dark
+        const hdr  = isDark ? '#c7d2fe' : '#1f2937'
+        const sub  = isDark ? '#94a3b8' : '#6b7280'
+        const bg   = isDark ? '#1e1b4b' : '#ffffff'
+        const tabActiveBg = isDark ? '#7c3aed' : '#3b82f6'
+        const tabInactBg  = isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6'
+        const saveBg  = isDark ? '#7c3aed' : '#3b82f6'
+        return (
+          <>
+            <div
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.50)', zIndex: 100 }}
+              onClick={() => setCustomizingDoorId(null)}
+            />
+            <div style={{
+              position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+              width: '100%', maxWidth: '390px', maxHeight: '72dvh',
+              background: bg, borderRadius: '16px 16px 0 0',
+              zIndex: 101, display: 'flex', flexDirection: 'column',
+            }}>
+              {/* Handle */}
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+                <div style={{ width: '32px', height: '3px', background: isDark ? 'rgba(255,255,255,0.18)' : '#e5e7eb', borderRadius: '2px' }} />
+              </div>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 16px 10px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 600, color: hdr }}>🎨 ドアをカスタマイズ</span>
+                <button onClick={() => setCustomizingDoorId(null)} style={{ color: sub, fontSize: '22px', lineHeight: 1 }}>×</button>
+              </div>
+              {/* Preview */}
+              <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '12px' }}>
+                <DoorPreview custom={draftCustom} />
+              </div>
+              {/* Tabs */}
+              <div style={{ display: 'flex', gap: '8px', padding: '0 16px 12px' }}>
+                {CUSTOM_TABS.map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setCustomTab(t.key)}
+                    style={{
+                      flex: 1, padding: '6px 0', borderRadius: '8px', fontSize: '12px',
+                      fontWeight: customTab === t.key ? 700 : 400,
+                      background: customTab === t.key ? tabActiveBg : tabInactBg,
+                      color: customTab === t.key ? '#ffffff' : sub,
+                    }}
+                  >{t.label}</button>
+                ))}
+              </div>
+              {/* Color swatches */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 8px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                  {SWATCH_MAP[customTab].map(color => {
+                    const field = FIELD_MAP[customTab]
+                    const selected = draftCustom[field] === color
+                    return (
+                      <button
+                        key={color}
+                        onClick={() => setDraftCustom(prev => ({ ...prev, [field]: color }))}
+                        style={{
+                          width: '40px', height: '40px', borderRadius: '8px',
+                          background: color,
+                          border: selected ? '3px solid #ffffff' : '2px solid rgba(0,0,0,0.15)',
+                          boxShadow: selected ? '0 0 0 2px #3b82f6' : 'none',
+                          flexShrink: 0,
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+                {customTab === 'label' && (
+                  <>
+                    <p style={{ fontSize: '11px', color: sub, margin: '12px 0 8px', fontWeight: 600 }}>テキスト色</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                      {PRESET_LABEL_TEXT.map(color => {
+                        const selected = draftCustom.labelTextColor === color
+                        return (
+                          <button
+                            key={color}
+                            onClick={() => setDraftCustom(prev => ({ ...prev, labelTextColor: color }))}
+                            style={{
+                              width: '40px', height: '40px', borderRadius: '8px',
+                              background: color,
+                              border: selected ? '3px solid #3b82f6' : '2px solid rgba(0,0,0,0.15)',
+                              boxShadow: selected ? '0 0 0 2px #818cf8' : 'none',
+                              flexShrink: 0,
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+              {/* Save */}
+              <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+                <button
+                  onClick={() => {
+                    setDoors(prev => prev.map(d => d.key === customizingDoorId ? { ...d, ...draftCustom } : d))
+                    setCustomizingDoorId(null)
+                  }}
+                  style={{
+                    width: '100%', padding: '12px', borderRadius: '12px',
+                    fontWeight: 700, fontSize: '15px',
+                    background: saveBg, color: '#ffffff',
+                  }}
+                >保存する</button>
+              </div>
+            </div>
+          </>
+        )
+      })()}
 
       {/* ── Favorites bottom sheet ───────────────────────────────── */}
       {showFavorites && (
@@ -392,7 +600,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
                 </p>
               ) : (
                 favorites.map(key => {
-                  const door = DOORS.find(d => d.key === key)
+                  const door = doors.find(d => d.key === key)
                   if (!door) return null
                   const typeLabel = key.startsWith('id') ? 'アイデンティティ' : key === 'myroom' ? 'マイルーム' : 'フレンド'
                   const typeBg    = theme.dark ? 'rgba(129,140,248,0.18)' : '#eff6ff'
@@ -423,6 +631,174 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+// ── Door Library sub-page ────────────────────────────────────────────────────
+
+type DoorLibraryProps = {
+  isOpen: boolean
+  onClose: () => void
+  doors: DoorRoom[]
+  onSaveDoor: (key: string, custom: DoorCustom) => void
+  theme: Theme
+}
+
+function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryProps) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
+  const [draftMap,    setDraftMap]    = useState<Record<string, DoorCustom>>({})
+
+  const pickerRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  const isDark   = theme.dark
+  const bg       = isDark ? '#0d0a1a' : '#f8fafc'
+  const hdrBg    = isDark ? '#140e2a' : '#ffffff'
+  const border   = isDark ? '#1e1a2e' : '#e5e7eb'
+  const textCol  = isDark ? '#c7d2fe' : '#1f2937'
+  const subCol   = isDark ? '#94a3b8' : '#6b7280'
+  const accent   = isDark ? '#a78bfa' : '#3b82f6'
+  const accentBg = isDark ? 'rgba(167,139,250,0.12)' : 'rgba(59,130,246,0.09)'
+  const expandBg = isDark ? 'rgba(124,58,237,0.06)' : 'rgba(59,130,246,0.03)'
+
+  type ColorSection = { field: keyof DoorCustom; label: string; pickerKey: string; keepAlpha: boolean }
+  const COLOR_SECTIONS: ColorSection[] = [
+    { field: 'doorColor',       label: 'ドア色',         pickerKey: 'door',      keepAlpha: false },
+    { field: 'doorAccentColor', label: '装飾色',         pickerKey: 'accent',    keepAlpha: false },
+    { field: 'labelBgColor',    label: 'ラベル背景',     pickerKey: 'labelBg',   keepAlpha: true  },
+    { field: 'labelTextColor',  label: 'ラベルテキスト', pickerKey: 'labelText', keepAlpha: false },
+    { field: 'knobColor',       label: 'ノブ色',         pickerKey: 'knob',      keepAlpha: false },
+  ]
+
+  const toggleExpand = (door: DoorRoom) => {
+    if (expandedKey === door.key) {
+      setExpandedKey(null)
+    } else {
+      const { doorColor, doorAccentColor, labelBgColor, labelTextColor, knobColor } = door
+      setDraftMap(prev => ({ ...prev, [door.key]: { doorColor, doorAccentColor, labelBgColor, labelTextColor, knobColor } }))
+      setExpandedKey(door.key)
+    }
+  }
+
+  const updateColor = (doorKey: string, field: keyof DoorCustom, hex: string) =>
+    setDraftMap(prev => ({ ...prev, [doorKey]: { ...prev[doorKey], [field]: hex } }))
+
+  const displayDoors = doors.filter(d => d.key !== 'add')
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 70,
+      background: bg,
+      transform: `translateX(${isOpen ? '0%' : '100%'})`,
+      transition: 'transform 0.3s ease',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{ height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: hdrBg, borderBottom: `1px solid ${border}`, gap: 8 }}>
+        <button onClick={onClose} style={{ color: accent, fontSize: '14px', background: 'none', border: 'none', cursor: 'pointer', minWidth: 60, textAlign: 'left' }}>← 戻る</button>
+        <span style={{ flex: 1, textAlign: 'center', color: textCol, fontSize: '15px', fontWeight: 600 }}>📚 図鑑</span>
+        <span style={{ minWidth: 60 }} />
+      </div>
+
+      {/* Door list */}
+      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '20px' }}>
+        {displayDoors.map(door => {
+          const isExpanded    = expandedKey === door.key
+          const draft         = draftMap[door.key]
+          const previewCustom = (isExpanded && draft) ? draft : door
+          const typeLabel     = door.key.startsWith('id') ? 'アイデンティティ' : door.key === 'myroom' ? 'マイルーム' : 'フレンド'
+
+          return (
+            <div key={door.key}>
+              {/* Card row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${border}`, background: isExpanded ? expandBg : 'transparent' }}>
+                <DoorPreview custom={previewCustom} W={52} H={80} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ color: textCol, fontSize: '14px', fontWeight: 700, marginBottom: '3px' }}>{door.label}</p>
+                  <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '10px', background: accentBg, color: accent, border: `1px solid ${accent}33` }}>{typeLabel}</span>
+                  <p style={{ color: subCol, fontSize: '11px', marginTop: '3px' }}>{door.sublabel}</p>
+                </div>
+                <button
+                  onClick={() => toggleExpand(door)}
+                  style={{ flexShrink: 0, fontSize: '12px', padding: '5px 14px', borderRadius: '14px', background: isExpanded ? accent : accentBg, color: isExpanded ? '#ffffff' : accent, border: `1px solid ${accent}55`, cursor: 'pointer' }}
+                >{isExpanded ? '閉じる' : '編集'}</button>
+              </div>
+
+              {/* Accordion */}
+              <div style={{ maxHeight: isExpanded ? '640px' : '0px', overflow: 'hidden', transition: 'max-height 0.35s ease', background: expandBg, borderBottom: isExpanded ? `1px solid ${border}` : 'none' }}>
+                <div style={{ padding: '14px 16px 20px' }}>
+                  {/* RGB sliders for each color field */}
+                  {COLOR_SECTIONS.map(({ field, label, pickerKey, keepAlpha }) => {
+                    const currHex  = (draft?.[field] ?? door[field]) as string
+                    const rgb      = hexToRgb(currHex)
+                    const hex6     = currHex.slice(0, 7)
+                    const alphaSfx = keepAlpha && currHex.length >= 9 ? currHex.slice(7) : ''
+                    const refKey   = `${door.key}-${pickerKey}`
+
+                    return (
+                      <div key={field} style={{ marginBottom: '14px' }}>
+                        <p style={{ fontSize: '11px', color: subCol, fontWeight: 600, marginBottom: '6px' }}>{label}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          {/* Color preview swatch */}
+                          <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: hex6, border: `1px solid ${border}`, flexShrink: 0 }} />
+                          {/* RGB sliders */}
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            {([
+                              { ch: 'r', lbl: 'R', val: rgb.r, col: '#ef4444' },
+                              { ch: 'g', lbl: 'G', val: rgb.g, col: '#22c55e' },
+                              { ch: 'b', lbl: 'B', val: rgb.b, col: '#3b82f6' },
+                            ] as const).map(({ ch, lbl, val, col }) => (
+                              <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <span style={{ fontSize: '10px', color: subCol, width: '10px', flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                                <input
+                                  type="range" min={0} max={255} value={val}
+                                  style={{ flex: 1, accentColor: col, cursor: 'pointer' }}
+                                  onChange={e => {
+                                    const n    = parseInt(e.target.value)
+                                    const nr   = ch === 'r' ? n : rgb.r
+                                    const ng   = ch === 'g' ? n : rgb.g
+                                    const nb   = ch === 'b' ? n : rgb.b
+                                    updateColor(door.key, field, rgbToHex(nr, ng, nb) + alphaSfx)
+                                  }}
+                                />
+                                <span style={{ fontSize: '10px', color: subCol, width: '22px', textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{val}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {/* Native picker trigger */}
+                          <button
+                            onClick={() => pickerRefs.current[refKey]?.click()}
+                            style={{ flexShrink: 0, width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '7px', background: accentBg, border: `1px solid ${accent}55`, fontSize: '14px', cursor: 'pointer' }}
+                          >🎨</button>
+                          <input
+                            type="color"
+                            style={{ display: 'none' }}
+                            ref={el => { pickerRefs.current[refKey] = el }}
+                            value={hex6}
+                            onChange={e => updateColor(door.key, field, e.target.value + alphaSfx)}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Save */}
+                  <button
+                    onClick={() => {
+                      if (draft) {
+                        onSaveDoor(door.key, draft)
+                        setDraftMap(prev => { const n = { ...prev }; delete n[door.key]; return n })
+                        setExpandedKey(null)
+                      }
+                    }}
+                    style={{ width: '100%', padding: '11px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', background: 'linear-gradient(to right, #a855f7, #ec4899)', color: '#ffffff', marginTop: '8px' }}
+                  >保存する</button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -484,17 +860,52 @@ function renderDoor(
   // Suspension wire
   ctx.strokeStyle = theme.rope
   ctx.lineWidth = 1
+  ctx.setLineDash([])
   ctx.beginPath()
   ctx.moveTo(cx, topY)
   ctx.lineTo(cx, 0)
   ctx.stroke()
 
+  // ── Ghost "add" door ─────────────────────────────────────────────
+  if (door.key === 'add') {
+    // Subtle fill
+    ctx.fillStyle = hexToRgba(theme.glow, 0.06)
+    ctx.fillRect(x, topY, w, h)
+
+    // Dashed border
+    ctx.setLineDash([7, 4])
+    ctx.strokeStyle = hexToRgba(theme.glow, 0.55)
+    ctx.lineWidth = 1.8
+    ctx.strokeRect(x, topY, w, h)
+    ctx.setLineDash([])
+
+    // Large "＋"
+    ctx.font = 'bold 48px system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = hexToRgba(theme.glow, 0.85)
+    ctx.fillText('+', cx, topY + h * 0.40)
+
+    // "追加する" label — no pill, plain text
+    ctx.font = 'bold 13px system-ui, sans-serif'
+    ctx.fillStyle = hexToRgba(theme.glow, 0.65)
+    ctx.fillText('追加する', cx, topY + h * 0.64)
+
+    // Opening flash
+    if (isOpening && progress > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.92, progress * 0.85)})`
+      ctx.fillRect(x, topY, w, h)
+    }
+    return
+  }
+
   // Door frame
-  ctx.fillStyle = '#6B4423'
+  ctx.setLineDash([])
+  ctx.fillStyle = door.doorAccentColor
   ctx.fillRect(x - 6, topY - 6, w + 12, h + 12)
 
   // Door body
-  ctx.fillStyle = '#8B5E3C'
+  ctx.fillStyle = door.doorColor
   ctx.fillRect(x, topY, w, h)
 
   // Wood grain
@@ -520,29 +931,46 @@ function renderDoor(
   ctx.fillRect(px, topY + 30, pw, Math.floor(h * 0.30))
   ctx.fillRect(px, topY + 30 + Math.floor(h * 0.30) + 8, pw, Math.floor(h * 0.38))
 
-  // Name plate
-  ctx.font = 'bold 9px system-ui, sans-serif'
+  // Center label (ドア中央・ノブ上)
+  ctx.font = 'bold 15px system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const textW  = ctx.measureText(door.label).width
-  const plateW = textW + 12
-  const plateH = 16
-  const plateX = cx - plateW / 2
-  const plateY = topY + 8
 
-  ctx.fillStyle = '#D4A853'
-  roundRect(ctx, plateX, plateY, plateW, plateH, 3)
+  const mainTxtW  = ctx.measureText(door.label).width
+  const mainPillW = Math.min(w - 8, mainTxtW + 24)
+  const mainPillH = 28
+  const mainPillX = cx - mainPillW / 2
+  const mainPillY = topY + Math.floor(h * 0.40)
+
+  ctx.fillStyle = hexToCanvasColor(door.labelBgColor)
+  roundRect(ctx, mainPillX, mainPillY, mainPillW, mainPillH, 8)
   ctx.fill()
 
-  ctx.fillStyle = '#3d2000'
-  ctx.fillText(door.label, cx, plateY + plateH / 2)
+  ctx.fillStyle = door.labelTextColor
+  ctx.fillText(door.label, cx, mainPillY + mainPillH / 2)
+
+  // Sublabel (人数・種別)
+  ctx.font = '11px system-ui, sans-serif'
+
+  const subTxtW  = ctx.measureText(door.sublabel).width
+  const subPillW = Math.min(w - 20, subTxtW + 16)
+  const subPillH = 17
+  const subPillX = cx - subPillW / 2
+  const subPillY = mainPillY + mainPillH + 4
+
+  ctx.fillStyle = hexToCanvasColor(door.labelBgColor, 0.48)
+  roundRect(ctx, subPillX, subPillY, subPillW, subPillH, 8)
+  ctx.fill()
+
+  ctx.fillStyle = hexToCanvasColor(door.labelTextColor, 0.80)
+  ctx.fillText(door.sublabel, cx, subPillY + subPillH / 2)
 
   // Doorknob
   ctx.beginPath()
-  ctx.arc(x + w - 14, topY + h * 0.55, 6, 0, Math.PI * 2)
-  ctx.fillStyle = '#D4A853'
+  ctx.arc(x + w - 14, topY + h * 0.68, 6, 0, Math.PI * 2)
+  ctx.fillStyle = door.knobColor
   ctx.fill()
-  ctx.strokeStyle = '#6B4423'
+  ctx.strokeStyle = door.doorAccentColor
   ctx.lineWidth = 0.8
   ctx.stroke()
 
@@ -558,17 +986,6 @@ function renderDoor(
     ctx.fillStyle = `rgba(255,255,255,${Math.min(0.92, progress * 0.85)})`
     ctx.fillRect(x, topY, w, h)
   }
-
-  // Label below door
-  ctx.font = 'bold 10px system-ui, sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'top'
-  ctx.fillStyle = theme.label
-  ctx.fillText(door.label, cx, topY + h + 8)
-
-  ctx.font = '8px system-ui, sans-serif'
-  ctx.fillStyle = theme.sub
-  ctx.fillText(door.sublabel, cx, topY + h + 22)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -592,5 +1009,32 @@ function hexToRgba(hex: string, alpha: number): string {
   const g = parseInt(hex.slice(3, 5), 16)
   const b = parseInt(hex.slice(5, 7), 16)
   return `rgba(${r},${g},${b},${alpha})`
+}
+
+// Converts 6-char (#RRGGBB) or 8-char (#RRGGBBaa) hex to canvas rgba string.
+// alphaOverride replaces any embedded alpha.
+function hexToCanvasColor(hex: string, alphaOverride?: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  let a: number
+  if (alphaOverride !== undefined) {
+    a = alphaOverride
+  } else if (hex.length >= 9) {
+    a = parseInt(hex.slice(7, 9), 16) / 255
+  } else {
+    a = 1
+  }
+  return `rgba(${r},${g},${b},${a.toFixed(3)})`
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.slice(0, 7) // ignore any trailing alpha chars
+  const m = /^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h)
+  return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 128, g: 128, b: 128 }
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return '#' + [r, g, b].map(x => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0')).join('')
 }
 

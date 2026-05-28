@@ -7,9 +7,9 @@ type Period = 'night' | 'morning' | 'afternoon' | 'evening'
 type Star = { x: number; y: number; size: number; dur: number; del: number }
 
 function getPeriod(hour: number): Period {
-  if (hour >= 22 || hour < 5)  return 'night'
-  if (hour < 11)                return 'morning'
-  if (hour < 17)                return 'afternoon'
+  if (hour >= 18 || hour < 5)  return 'night'
+  if (hour < 11)               return 'morning'
+  if (hour < 15)               return 'afternoon'
   return 'evening'
 }
 

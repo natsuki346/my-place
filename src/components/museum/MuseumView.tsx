@@ -5,6 +5,7 @@ import { createAvatar } from '@dicebear/core'
 import { adventurer } from '@dicebear/collection'
 import type { Options } from '@dicebear/adventurer'
 import { SkyLayer } from '@/components/room/SkyLayer'
+import { useWorldStore } from '@/store/useWorldStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,9 +48,9 @@ type SheetSelection = { kind: 'tag' | 'emoji'; content: string }
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getPeriod(h: number): Period {
-  if (h >= 22 || h < 5) return 'night'
+  if (h >= 18 || h < 5) return 'night'
   if (h < 11)           return 'morning'
-  if (h < 17)           return 'afternoon'
+  if (h < 15)           return 'afternoon'
   return 'evening'
 }
 
@@ -239,6 +240,18 @@ export function MuseumView() {
   const [editorTab,          setEditorTab]          = useState<EditorTab>('skin')
   const [editingConfig,      setEditingConfig]      = useState<AvatarConfig>(DEFAULT_AVATAR)
 
+  const [displayName,           setDisplayName]           = useState('なつき')
+  const [userId,                setUserId]                = useState('natsuki_346')
+  const [bio,                   setBio]                   = useState('夜型の音楽好き🎵 猫と暮らしてます🐱')
+  const [identityTags,          setIdentityTags]          = useState(['#夜型', '#音楽好き', '#猫派', '#インドア'])
+  const [subPage,               setSubPage]               = useState<'profile-edit' | 'tag-list' | 'connections' | null>(null)
+  const [profileHeaderGradient, setProfileHeaderGradient] = useState('linear-gradient(155deg, #7c3aed 0%, #ec4899 100%)')
+  const [editName,              setEditName]              = useState('')
+  const [editId,                setEditId]                = useState('')
+  const [editBio,               setEditBio]               = useState('')
+
+  const { setView } = useWorldStore()
+
   const canvasRefs          = useRef<(HTMLDivElement | null)[]>([null, null, null])
   const activeCanvasRef     = useRef(0)
   activeCanvasRef.current   = activeCanvas
@@ -408,6 +421,15 @@ export function MuseumView() {
   const saveAvatarConfig = () => {
     setAvatarConfig(editingConfig)
     setIsAvatarEditorOpen(false)
+  }
+
+  const openSubPage = (page: 'profile-edit' | 'tag-list' | 'connections') => {
+    if (page === 'profile-edit') { setEditName(displayName); setEditId(userId); setEditBio(bio) }
+    setSubPage(page)
+  }
+  const saveProfileAndClose = () => {
+    setDisplayName(editName); setUserId(editId); setBio(editBio)
+    setSubPage(null)
   }
 
   const activeColor  = TAB_ACTIVE_COLOR[period]
@@ -626,8 +648,8 @@ export function MuseumView() {
       {/* ── Profile ──────────────────────────────────────────────── */}
       {activeTab === 'profile' && (
         <div className="relative z-10 flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-          <div style={{ height: '120px', background: HEADER_GRADIENT[period], position: 'relative', flexShrink: 0 }}>
-            <button style={{
+          <div style={{ height: '120px', background: profileHeaderGradient, position: 'relative', flexShrink: 0 }}>
+            <button onClick={() => openSubPage('profile-edit')} style={{
               position: 'absolute', top: '14px', right: '16px',
               fontSize: '12px', color: 'rgba(255,255,255,0.9)',
               background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.30)',
@@ -647,20 +669,32 @@ export function MuseumView() {
               }}>アバターを編集</button>
             </div>
             <div style={{ padding: '0 16px 14px' }}>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>なつき</div>
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.42)', marginBottom: '8px' }}>@natsuki_346</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{displayName}</div>
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.42)', marginBottom: '8px' }}>@{userId}</div>
               <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.78)', lineHeight: 1.55, marginBottom: '10px' }}>
-                夜型の音楽好き🎵 猫と暮らしてます🐱
+                {bio}
               </div>
-              <div style={{ display: 'flex', gap: '20px', fontSize: '13px' }}>
-                <span><span style={{ fontWeight: 700, color: 'white' }}>128</span><span style={{ color: 'rgba(255,255,255,0.42)', marginLeft: '4px' }}>フォロー</span></span>
-                <span><span style={{ fontWeight: 700, color: 'white' }}>64</span><span style={{ color: 'rgba(255,255,255,0.42)', marginLeft: '4px' }}>フォロワー</span></span>
+              <div style={{ display: 'flex', gap: '28px' }}>
+                <button
+                  onClick={() => openSubPage('tag-list')}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: 'white', lineHeight: 1 }}>🏷️ {identityTags.length}</span>
+                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.42)' }}>フォロー中のタグ</span>
+                </button>
+                <button
+                  onClick={() => openSubPage('connections')}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: 'white', lineHeight: 1 }}>🤝 23</span>
+                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.42)' }}>つながり</span>
+                </button>
               </div>
             </div>
             <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '0 16px' }} />
             <div style={{ padding: '12px 0' }}>
               <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '0 16px', scrollbarWidth: 'none' }}>
-                {PROFILE_TAGS.map(tag => (
+                {identityTags.map(tag => (
                   <span key={tag} style={{
                     flexShrink: 0, fontSize: '12px', padding: '4px 12px', borderRadius: '14px',
                     background: 'rgba(167,139,250,0.14)', color: '#c4b5fd',
@@ -783,6 +817,113 @@ export function MuseumView() {
           </div>
         </div>
       )}
+
+      {/* ── Profile sub-pages (always in DOM, slide in/out) ─────── */}
+      {(['profile-edit', 'tag-list', 'connections'] as const).map(page => (
+        <div
+          key={page}
+          style={{
+            position: 'absolute', inset: 0, zIndex: 60,
+            background: '#0f0e1a',
+            transform: `translateX(${subPage === page ? '0%' : '100%'})`,
+            transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex', flexDirection: 'column',
+          }}
+        >
+          {page === 'profile-edit' && (
+            <SubPageWrapper
+              title="プロフィール編集"
+              onBack={() => setSubPage(null)}
+              rightAction={
+                <button onClick={saveProfileAndClose} style={{ fontSize: '14px', color: '#a78bfa', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>保存</button>
+              }
+            >
+              <div style={{ overflowY: 'auto', flex: 1, padding: '16px', scrollbarWidth: 'none' }}>
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '8px', letterSpacing: '0.8px' }}>ヘッダー</div>
+                  <div style={{ height: '72px', borderRadius: '12px', background: profileHeaderGradient, marginBottom: '10px' }} />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {HEADER_PRESETS.map(g => (
+                      <button key={g} onClick={() => setProfileHeaderGradient(g)} style={{
+                        width: '36px', height: '36px', borderRadius: '8px', background: g, flexShrink: 0,
+                        border: profileHeaderGradient === g ? '2px solid white' : '2px solid transparent',
+                        boxShadow: profileHeaderGradient === g ? '0 0 0 2px #a78bfa' : 'none',
+                      }} />
+                    ))}
+                  </div>
+                </div>
+                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
+                  <ProfileAvatar config={avatarConfig} />
+                </div>
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '6px', letterSpacing: '0.8px' }}>表示名</div>
+                  <input type="text" value={editName} onChange={e => setEditName(e.target.value)} style={INPUT_STYLE} placeholder="表示名を入力" />
+                </div>
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '6px', letterSpacing: '0.8px' }}>ユーザーID</div>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.45)', fontSize: '14px' }}>@</span>
+                    <input type="text" value={editId} onChange={e => setEditId(e.target.value)} style={{ ...INPUT_STYLE, paddingLeft: '26px' }} placeholder="user_id" />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '6px', letterSpacing: '0.8px' }}>自己紹介</div>
+                  <textarea value={editBio} onChange={e => setEditBio(e.target.value)} rows={3} style={{ ...INPUT_STYLE, resize: 'none', lineHeight: 1.6 }} placeholder="自己紹介を入力" />
+                </div>
+              </div>
+            </SubPageWrapper>
+          )}
+
+          {page === 'tag-list' && (
+            <SubPageWrapper title="フォロー中のタグ" onBack={() => setSubPage(null)}>
+              <div style={{ overflowY: 'auto', flex: 1, padding: '14px 16px 80px', scrollbarWidth: 'none' }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginBottom: '14px' }}>
+                  {identityTags.length}件のタグをフォロー中
+                </div>
+                {identityTags.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '13px', paddingTop: '24px' }}>
+                    フォロー中のタグはありません
+                  </div>
+                ) : (
+                  identityTags.map(tag => (
+                    <div key={tag} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      <span style={{ fontSize: '13px', padding: '4px 12px', borderRadius: '14px', background: 'rgba(167,139,250,0.14)', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.26)' }}>{tag}</span>
+                      <button onClick={() => setIdentityTags(prev => prev.filter(t => t !== tag))} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '10px', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.12)' }}>フォロー解除</button>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div style={{ flexShrink: 0, padding: '12px 16px 24px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <button onClick={() => { setSubPage(null); setView('explore') }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', fontSize: '14px', fontWeight: 600, background: 'rgba(167,139,250,0.15)', color: '#c4b5fd', cursor: 'pointer' }}>🔍 タグを探す</button>
+              </div>
+            </SubPageWrapper>
+          )}
+
+          {page === 'connections' && (
+            <SubPageWrapper title="つながり" onBack={() => setSubPage(null)}>
+              <div style={{ overflowY: 'auto', flex: 1, padding: '14px 16px', scrollbarWidth: 'none' }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginBottom: '14px' }}>
+                  共通タグで出会ったつながり
+                </div>
+                {DUMMY_CONNECTIONS.map(({ name, seed, commonTags }) => (
+                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <ConnectionAvatar seed={seed} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'white', marginBottom: '4px' }}>{name}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {commonTags.map(tag => (
+                          <span key={tag} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '10px', background: 'rgba(167,139,250,0.14)', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.26)' }}>{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <button style={{ flexShrink: 0, fontSize: '12px', padding: '6px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.60)', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer' }}>見る</button>
+                  </div>
+                ))}
+              </div>
+            </SubPageWrapper>
+          )}
+        </div>
+      ))}
 
       {/* ── Avatar editor bottom sheet ───────────────────────────── */}
       {isAvatarEditorOpen && (
@@ -1095,6 +1236,60 @@ export function MuseumView() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+const DUMMY_CONNECTIONS = [
+  { name: 'ゆき', seed: 'yuki-user',  commonTags: ['#音楽', '#夜型'] },
+  { name: 'はる', seed: 'haru-user',  commonTags: ['#読書'] },
+  { name: 'そら', seed: 'sora-user',  commonTags: ['#映画', '#インドア', '#アート'] },
+  { name: 'れん', seed: 'ren-user',   commonTags: ['#猫派'] },
+  { name: 'みお', seed: 'mio-user',   commonTags: ['#音楽', '#インドア', '#コーヒー'] },
+]
+
+const HEADER_PRESETS = [
+  'linear-gradient(155deg, #7c3aed 0%, #ec4899 100%)',
+  'linear-gradient(155deg, #0ea5e9 0%, #ffd080 100%)',
+  'linear-gradient(155deg, #1e1b4b 0%, #4c1d95 100%)',
+  'linear-gradient(155deg, #ea580c 0%, #9333ea 100%)',
+  'linear-gradient(155deg, #10b981 0%, #3b82f6 100%)',
+  'linear-gradient(155deg, #f43f5e 0%, #f97316 100%)',
+]
+
+const INPUT_STYLE: React.CSSProperties = {
+  width: '100%', background: 'rgba(255,255,255,0.10)', color: 'white',
+  borderRadius: '12px', padding: '8px 12px', border: '1px solid rgba(255,255,255,0.12)',
+  fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+}
+
+function SubPageWrapper({ children, title, onBack, rightAction }: {
+  children: React.ReactNode
+  title: string
+  onBack: () => void
+  rightAction?: React.ReactNode
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ height: 56, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px', color: 'rgba(255,255,255,0.7)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', flexShrink: 0, minWidth: 60 }}>← 戻る</button>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: '16px', fontWeight: 700, color: 'white' }}>{title}</span>
+        <div style={{ minWidth: 60, display: 'flex', justifyContent: 'flex-end' }}>{rightAction}</div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function ConnectionAvatar({ seed }: { seed: string }) {
+  const [svgString, setSvgString] = useState('')
+  useEffect(() => {
+    setSvgString(createAvatar(adventurer, { seed, backgroundColor: ['b6e3f4'] }).toString().replace('<svg ', '<svg width="100%" '))
+  }, [seed])
+  return (
+    <div
+      style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#b6e3f4', border: '2px solid rgba(255,255,255,0.18)' }}
+      dangerouslySetInnerHTML={{ __html: svgString }}
+    />
+  )
+}
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (

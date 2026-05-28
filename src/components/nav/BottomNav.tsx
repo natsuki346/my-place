@@ -7,7 +7,7 @@ import type { AppView } from '@/store/useWorldStore'
 type Period = 'morning' | 'afternoon' | 'evening' | 'night'
 
 function getPeriod(h: number): Period {
-  return h >= 5 && h < 11 ? 'morning' : h >= 11 && h < 17 ? 'afternoon' : h >= 17 && h < 22 ? 'evening' : 'night'
+  return h >= 5 && h < 11 ? 'morning' : h >= 11 && h < 15 ? 'afternoon' : h >= 15 && h < 18 ? 'evening' : 'night'
 }
 
 const TABS: { key: AppView; Icon: React.FC<{ size?: number; strokeWidth?: number }>; label: string }[] = [
