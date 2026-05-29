@@ -30,23 +30,34 @@ export function BottomNav({ current, onChange }: Props) {
     return () => clearInterval(id)
   }, [])
 
+  const navBg = {
+    morning:   'bg-sky-100',
+    afternoon: 'bg-blue-100',
+    evening:   'bg-orange-100',
+    night:     'bg-indigo-950',
+  }[period]
+
   const activeColor = {
     morning:   'text-sky-600',
     afternoon: 'text-blue-600',
     evening:   'text-orange-600',
-    night:     'text-purple-600',
+    night:     'text-indigo-300',
   }[period]
+
+  const inactiveColor = period === 'night' ? 'text-indigo-500' : 'text-gray-400'
 
   const activeIndicator = {
     morning:   'bg-sky-500',
     afternoon: 'bg-blue-500',
     evening:   'bg-orange-500',
-    night:     'bg-purple-500',
+    night:     'bg-indigo-400',
   }[period]
+
+  const borderColor = period === 'night' ? 'border-indigo-800' : 'border-gray-200'
 
   return (
     <nav
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] flex z-50 bg-white border-t border-gray-200"
+      className={`fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] flex z-50 border-t transition-colors duration-500 ${navBg} ${borderColor}`}
       style={{ height: '56px' }}
     >
       {TABS.map(({ key, Icon, label }) => {
@@ -55,12 +66,12 @@ export function BottomNav({ current, onChange }: Props) {
           <button
             key={key}
             onClick={() => onChange(key)}
-            className={`flex-1 flex flex-col items-center justify-center gap-[2px] pt-2 relative transition-colors ${
-              active ? activeColor : 'text-gray-400'
+            className={`flex-1 flex flex-col items-center justify-center gap-[2px] pt-2 relative transition-colors duration-500 ${
+              active ? activeColor : inactiveColor
             }`}
           >
             {active && (
-              <div className={`absolute top-0 left-0 right-0 h-0.5 ${activeIndicator}`} />
+              <div className={`absolute top-0 left-0 right-0 h-0.5 transition-colors duration-500 ${activeIndicator}`} />
             )}
             <Icon size={20} strokeWidth={(active ?? false) ? 2.2 : 1.8} />
             <span className="text-[10px]" style={{ fontWeight: active ? 600 : 400 }}>

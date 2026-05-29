@@ -1,258 +1,107 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { useTagStore } from '@/store/useTagStore'
+import { TagRoom } from '@/components/TagRoom'
 
 // ── Period ────────────────────────────────────────────────────────────────────
 
 type Period = 'morning' | 'afternoon' | 'evening' | 'night'
 
 function getPeriod(h: number): Period {
-  return h >= 5 && h < 11 ? 'morning' : h >= 11 && h < 15 ? 'afternoon' : h >= 15 && h < 18 ? 'evening' : 'night'
+  if (h >= 18 || h < 5) return 'night'
+  if (h < 11) return 'morning'
+  if (h < 15) return 'afternoon'
+  return 'evening'
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
 type Theme = {
-  dot: string; bg: string; text: string; sub: string; card: string
+  dot: string; bg: string; text: string; sub: string; card: string; dimText: string
+  border: string; tabActive: string; tabBorder: string; tabInactive: string
 }
 
 const MAP_THEME: Record<Period, Theme> = {
-  morning:   { dot: '#0ea5e9', bg: '#eff6ff', text: '#1e40af', sub: '#6b7280', card: 'rgba(255,255,255,0.75)' },
-  afternoon: { dot: '#3b82f6', bg: '#dbeafe', text: '#1d4ed8', sub: '#6b7280', card: 'rgba(255,255,255,0.75)' },
-  evening:   { dot: '#f97316', bg: '#fff7ed', text: '#c2410c', sub: '#9ca3af', card: 'rgba(255,255,255,0.75)' },
-  night:     { dot: '#818cf8', bg: '#0f0a2e', text: '#c7d2fe', sub: '#94a3b8', card: 'rgba(255,255,255,0.06)' },
+  morning:   { dot: '#0ea5e9', bg: '#eff6ff', text: '#1e40af', sub: '#6b7280', card: 'rgba(255,255,255,0.75)', dimText: '#9ca3af', border: '#e5e7eb', tabActive: '#0284c7', tabBorder: '#0ea5e9', tabInactive: '#9ca3af' },
+  afternoon: { dot: '#3b82f6', bg: '#dbeafe', text: '#1d4ed8', sub: '#6b7280', card: 'rgba(255,255,255,0.75)', dimText: '#9ca3af', border: '#e5e7eb', tabActive: '#2563eb', tabBorder: '#3b82f6', tabInactive: '#9ca3af' },
+  evening:   { dot: '#f97316', bg: '#fff7ed', text: '#c2410c', sub: '#9ca3af', card: 'rgba(255,255,255,0.75)', dimText: '#d1d5db', border: '#e5e7eb', tabActive: '#ea580c', tabBorder: '#f97316', tabInactive: '#9ca3af' },
+  night:     { dot: '#818cf8', bg: '#0f0a2e', text: '#c7d2fe', sub: '#94a3b8', card: 'rgba(255,255,255,0.06)', dimText: '#4b5563', border: '#1a1530', tabActive: '#a78bfa', tabBorder: '#7f77dd', tabInactive: '#444'    },
 }
 
-// ── City data ─────────────────────────────────────────────────────────────────
+// ── Mock data ─────────────────────────────────────────────────────────────────
 
-const MAP_IMG = 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/World_map_-_low_resolution.svg/2560px-World_map_-_low_resolution.svg.png'
+const RELATED_TAGS: Record<string, { tag: string; count: number }[]> = {
+  夜型人間: [
+    { tag: '深夜作業',      count: 892  },
+    { tag: '夜食',          count: 654  },
+    { tag: '朝型になりたい', count: 431  },
+  ],
+  内向型: [
+    { tag: 'HSP',      count: 1200 },
+    { tag: 'ひとり時間', count: 980  },
+    { tag: '読書垢',    count: 760  },
+  ],
+  猫好き: [
+    { tag: '猫のいる生活', count: 543  },
+    { tag: 'ねこ部',      count: 1100 },
+    { tag: '保護猫',      count: 320  },
+  ],
+}
 
-type City = { name: string; coordinates: [number, number]; tag: string }
-
-const CITIES: City[] = [
-  { name: 'Tokyo',        coordinates: [ 139.6917,  35.6895], tag: '#夜型人間'     },
-  { name: 'New York',     coordinates: [ -74.0060,  40.7128], tag: '#コーヒー好き' },
-  { name: 'London',       coordinates: [  -0.1278,  51.5074], tag: '#読書垢'       },
-  { name: 'Paris',        coordinates: [   2.3522,  48.8566], tag: '#内向型'       },
-  { name: 'Seoul',        coordinates: [ 126.9780,  37.5665], tag: '#HSP'          },
-  { name: 'Sydney',       coordinates: [ 151.2093, -33.8688], tag: '#音楽好き'     },
-  { name: 'São Paulo',    coordinates: [ -46.6333, -23.5505], tag: '#ひとり時間'   },
-  { name: 'Mumbai',       coordinates: [  72.8777,  19.0760], tag: '#猫好き'       },
-  { name: 'Cairo',        coordinates: [  31.2357,  30.0444], tag: '#夜型人間'     },
-  { name: 'Moscow',       coordinates: [  37.6173,  55.7558], tag: '#内向型'       },
+const ALL_TAGS = [
+  { tag: '夜型人間',      count: 1200 },
+  { tag: '夜食',          count: 654  },
+  { tag: '深夜作業',      count: 892  },
+  { tag: '夜景好き',      count: 234  },
+  { tag: '朝型になりたい', count: 431  },
+  { tag: '内向型',        count: 1900 },
+  { tag: 'HSP',           count: 3200 },
+  { tag: 'ひとり時間',    count: 980  },
+  { tag: '読書垢',        count: 1700 },
+  { tag: 'コーヒー好き',  count: 2100 },
+  { tag: '猫好き',        count: 1200 },
+  { tag: '猫のいる生活',  count: 543  },
+  { tag: 'ねこ部',        count: 1100 },
+  { tag: '音楽好き',      count: 1400 },
+  { tag: '保護猫',        count: 320  },
 ]
 
-// ── Dummy data ────────────────────────────────────────────────────────────────
-
-const TRENDS = [
-  { tag: '#HSP',           count: '3.2k人' },
-  { tag: '#夜型人間',     count: '2.8k人' },
-  { tag: '#コーヒー好き', count: '2.1k人' },
-  { tag: '#内向型',       count: '1.9k人' },
-  { tag: '#読書垢',       count: '1.7k人' },
-  { tag: '#音楽好き',     count: '1.4k人' },
-  { tag: '#猫好き',       count: '1.2k人' },
-  { tag: '#ひとり時間',   count: '980人'  },
+const MOCK_USERS = [
+  { name: 'ゆき',   tags: ['#夜型人間', '#HSP'],          commonTags: ['#夜型人間'] },
+  { name: 'あおい', tags: ['#夜型人間', '#内向型'],        commonTags: ['#夜型人間', '#内向型'] },
+  { name: 'れん',   tags: ['#コーヒー好き', '#夜型人間'], commonTags: ['#夜型人間'] },
 ]
 
-const USERS = [
-  { name: 'ゆき',   emoji: '🌙', tags: ['#夜型人間', '#HSP']          },
-  { name: 'りょう', emoji: '☕', tags: ['#コーヒー好き', '#読書垢']    },
-  { name: 'はな',   emoji: '🌸', tags: ['#内向型', '#猫好き']          },
-  { name: 'けいた', emoji: '🎵', tags: ['#音楽好き', '#ひとり時間']    },
+const MOCK_FRIENDS = [
+  { name: 'Ryo',  tags: ['#内向型', '#読書垢'],    commonTags: ['#内向型'] },
+  { name: 'Hana', tags: ['#猫好き', '#夜型人間'],  commonTags: ['#猫好き'] },
 ]
 
-// ── Map tab ───────────────────────────────────────────────────────────────────
+const MOCK_HISTORY = [
+  { tag: '夜型人間', count: 1200 },
+  { tag: 'HSP',      count: 3200 },
+  { tag: '内向型',   count: 1900 },
+]
 
-type Xform = { scale: number; tx: number; ty: number }
-
-function MapTab({ t }: { t: Theme }) {
-  const [selectedCity, setSelectedCity] = useState<City | null>(null)
-  const [xform,        setXform]        = useState<Xform>({ scale: 1, tx: 0, ty: 0 })
-
-  const containerRef = useRef<HTMLDivElement>(null)
-  const xformRef     = useRef<Xform>({ scale: 1, tx: 0, ty: 0 })
-  const didDragRef   = useRef(false)
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-
-    let isPinching = false, isPanning = false
-    let pinchDist0 = 0, pinchScale0 = 1
-    let panX0 = 0, panY0 = 0, panTx0 = 0, panTy0 = 0
-    let lastTap = 0
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        isPinching = true; isPanning = false
-        pinchDist0 = Math.hypot(
-          e.touches[1].clientX - e.touches[0].clientX,
-          e.touches[1].clientY - e.touches[0].clientY,
-        )
-        pinchScale0 = xformRef.current.scale
-      } else if (e.touches.length === 1) {
-        const now = Date.now()
-        if (now - lastTap < 280) {
-          const reset = { scale: 1, tx: 0, ty: 0 }
-          xformRef.current = reset; setXform(reset); setSelectedCity(null)
-          lastTap = 0; isPanning = false; return
-        }
-        lastTap = now
-        isPanning = true; isPinching = false; didDragRef.current = false
-        panX0  = e.touches[0].clientX; panY0  = e.touches[0].clientY
-        panTx0 = xformRef.current.tx;  panTy0 = xformRef.current.ty
-      }
-    }
-
-    const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault()
-      if (e.touches.length === 2 && isPinching) {
-        const dist = Math.hypot(
-          e.touches[1].clientX - e.touches[0].clientX,
-          e.touches[1].clientY - e.touches[0].clientY,
-        )
-        const s = Math.min(4, Math.max(1, pinchScale0 * dist / pinchDist0))
-        xformRef.current = { ...xformRef.current, scale: s }
-        setXform({ ...xformRef.current })
-      } else if (e.touches.length === 1 && isPanning) {
-        const dx = e.touches[0].clientX - panX0
-        const dy = e.touches[0].clientY - panY0
-        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) didDragRef.current = true
-        xformRef.current = { ...xformRef.current, tx: panTx0 + dx, ty: panTy0 + dy }
-        setXform({ ...xformRef.current })
-      }
-    }
-
-    const onTouchEnd = () => { isPinching = false; isPanning = false }
-
-    el.addEventListener('touchstart', onTouchStart, { passive: true })
-    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
-    el.addEventListener('touchend',   onTouchEnd)
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart)
-      el.removeEventListener('touchmove',  onTouchMove)
-      el.removeEventListener('touchend',   onTouchEnd)
-    }
-  }, [])
-
-  // Forward transform: city lon/lat → screen position for the bubble
-  const bubPos = (() => {
-    if (!selectedCity || !containerRef.current) return null
-    const rect = containerRef.current.getBoundingClientRect()
-    if (!rect.width) return null
-    const { scale, tx, ty } = xform
-    const W = rect.width, H = rect.height
-    const localX = (selectedCity.coordinates[0] + 180) / 360 * W
-    const localY = (90 - selectedCity.coordinates[1]) / 180 * H
-    const screenX = (localX - W / 2) * scale + W / 2 + tx
-    const screenY = (localY - H / 2) * scale + H / 2 + ty
-    if (screenX < 0 || screenX > W || screenY < 20 || screenY > H) return null
-    return { x: Math.min(Math.max(screenX, 60), W - 60), y: screenY }
-  })()
-
-  return (
-    <div
-      ref={containerRef}
-      className="flex-1 relative overflow-hidden"
-      style={{ touchAction: 'none', background: '#0f1e35' }}
-    >
-      {/* ── Pan/zoom wrapper ──────────────────────────────────────── */}
-      <div
-        style={{
-          position: 'absolute', inset: 0,
-          transform: `translate(${xform.tx}px,${xform.ty}px) scale(${xform.scale})`,
-          transformOrigin: 'center center',
-          willChange: 'transform',
-        }}
-      >
-        <img
-          src={MAP_IMG}
-          alt=""
-          draggable={false}
-          style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block', userSelect: 'none', pointerEvents: 'none' }}
-        />
-
-        {/* City dots – positioned by equirectangular lon/lat */}
-        {CITIES.map((city) => {
-          const left = (city.coordinates[0] + 180) / 360 * 100
-          const top  = (90 - city.coordinates[1]) / 180 * 100
-          return (
-            <div
-              key={city.name}
-              onClick={() => { if (!didDragRef.current) setSelectedCity(selectedCity?.name === city.name ? null : city) }}
-              style={{
-                position: 'absolute',
-                left: `${left}%`,
-                top:  `${top}%`,
-                transform: 'translate(-50%,-50%)',
-                cursor: 'pointer',
-                zIndex: 2,
-              }}
-            >
-              <div style={{
-                width: 10, height: 10, borderRadius: '50%',
-                background: t.dot,
-                boxShadow: `0 0 8px ${t.dot}`,
-              }} />
-            </div>
-          )
-        })}
-      </div>
-
-      {/* ── Bubble overlay (screen coords, outside transform) ─────── */}
-      {bubPos && selectedCity && (
-        <div
-          style={{
-            position: 'absolute',
-            left: `${bubPos.x}px`,
-            top:  `${bubPos.y - 62}px`,
-            transform: 'translateX(-50%)',
-            zIndex: 10,
-            pointerEvents: 'none',
-          }}
-        >
-          <div style={{
-            background: 'white', borderRadius: '12px',
-            padding: '8px 14px',
-            boxShadow: '0 6px 24px rgba(0,0,0,0.28)',
-            whiteSpace: 'nowrap',
-          }}>
-            <p style={{ fontSize: '12px', fontWeight: 700, color: '#1f2937' }}>{selectedCity.tag}</p>
-            <p style={{ fontSize: '10px', color: '#6b7280', marginTop: '2px' }}>{selectedCity.name}</p>
-          </div>
-          <div style={{
-            position: 'absolute', bottom: '-8px', left: '50%',
-            transform: 'translateX(-50%)',
-            width: 0, height: 0,
-            borderLeft: '7px solid transparent',
-            borderRight: '7px solid transparent',
-            borderTop: '9px solid white',
-          }} />
-        </div>
-      )}
-
-      {/* ── Hint ─────────────────────────────────────────────────── */}
-      <div style={{ position: 'absolute', bottom: '14px', left: '50%', transform: 'translateX(-50%)', pointerEvents: 'none' }}>
-        <span style={{
-          fontSize: '11px', color: 'rgba(255,255,255,0.65)',
-          background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(8px)',
-          padding: '4px 14px', borderRadius: '20px', whiteSpace: 'nowrap',
-        }}>
-          ダブルタップでリセット
-        </span>
-      </div>
-    </div>
-  )
+function fmtCount(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k人` : `${n}人`
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function ExploreView() {
-  const [period,  setPeriod]  = useState<Period>('night')
-  const [mainTab, setMainTab] = useState<'search' | 'map'>('search')
-  const [query,   setQuery]   = useState('')
-  const [subTab,  setSubTab]  = useState<'trend' | 'user'>('trend')
+type Props = { onEnterRoom?: (key: string) => void }
+type InitTab   = 'recommend' | 'history'
+type SearchTab = 'tags' | 'users' | 'friends'
+
+export function ExploreView({ onEnterRoom }: Props) {
+  const [period,      setPeriod]      = useState<Period>('night')
+  const [query,       setQuery]       = useState('')
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [activeTab,   setActiveTab]   = useState<InitTab>('recommend')
+  const [searchTab,   setSearchTab]   = useState<SearchTab>('tags')
+
+  const { followingTags } = useTagStore()
 
   useEffect(() => {
     setPeriod(getPeriod(new Date().getHours()))
@@ -261,132 +110,305 @@ export function ExploreView() {
   }, [])
 
   const t = MAP_THEME[period]
+  const q = query.trim().toLowerCase()
+
+  // Recommended tags: deduplicated related tags from followed tags
+  const recommendedTags = (() => {
+    const seen = new Set<string>()
+    const result: { tag: string; count: number }[] = []
+    for (const followed of followingTags) {
+      for (const related of RELATED_TAGS[followed] ?? []) {
+        if (!seen.has(related.tag)) {
+          seen.add(related.tag)
+          result.push(related)
+        }
+      }
+    }
+    return result
+  })()
+
+  // Search results
+  const matchedTags = q ? ALL_TAGS.filter(item => item.tag.toLowerCase().includes(q)) : []
+
+  const scoreUser = (u: { name: string; tags: string[]; commonTags: string[] }) => {
+    let s = 0
+    if (u.name.toLowerCase().includes(q)) s += 10
+    if (u.commonTags.some(tag => tag.toLowerCase().includes(q))) s += 5
+    if (u.tags.some(tag => tag.toLowerCase().includes(q))) s += 2
+    return s
+  }
+
+  const matchedUsers = q
+    ? MOCK_USERS.filter(u => scoreUser(u) > 0).sort((a, b) => scoreUser(b) - scoreUser(a))
+    : MOCK_USERS
+
+  const matchedFriends = q
+    ? MOCK_FRIENDS.filter(u => scoreUser(u) > 0).sort((a, b) => scoreUser(b) - scoreUser(a))
+    : MOCK_FRIENDS
 
   return (
+    <>
     <div
       className="flex flex-col h-full overflow-hidden"
       style={{ background: t.bg, fontFamily: 'system-ui, sans-serif' }}
     >
-      {/* ── Main tab bar ────────────────────────────────────────────── */}
-      <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-        {(['search', 'map'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setMainTab(tab)}
-            style={{
-              flex: 1,
-              padding: '12px 0',
-              fontSize: '14px',
-              fontWeight: mainTab === tab ? 700 : 400,
-              color: mainTab === tab ? t.text : '#9ca3af',
-              borderBottom: mainTab === tab ? `2px solid ${t.dot}` : '2px solid transparent',
-              background: 'transparent',
-              transition: 'color 0.15s',
-            }}
-          >
-            {tab === 'search' ? 'Search' : 'Map'}
-          </button>
-        ))}
+      {/* ── Search bar ──────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 px-4 pt-4 pb-3">
+        <div
+          className="flex items-center gap-2"
+          style={{ background: 'rgba(0,0,0,0.07)', borderRadius: '24px', padding: '10px 16px' }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+            stroke={t.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ユーザー名や #タグ で検索"
+            className="flex-1 bg-transparent outline-none"
+            style={{ fontSize: '14px', color: t.text }}
+          />
+          {query.length > 0 && (
+            <button
+              onClick={() => setQuery('')}
+              className="border-0"
+              style={{ color: t.sub, fontSize: '18px', lineHeight: 1, background: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* ── Search tab ──────────────────────────────────────────────── */}
-      {mainTab === 'search' && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Search bar */}
-          <div className="flex-shrink-0 px-4 pt-3 pb-2">
+      {/* ── Content ─────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto">
+        {q === '' ? (
+          /* ── Initial state: tabs ──────────────────────────────────── */
+          <>
+            {/* Tab bar */}
             <div
-              className="flex items-center gap-2"
-              style={{ background: 'rgba(0,0,0,0.07)', borderRadius: '24px', padding: '10px 16px' }}
+              className="flex flex-shrink-0 border-b bg-transparent"
+              style={{ borderBottomColor: t.border }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                stroke={t.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="ユーザー名・ハッシュタグを検索"
-                className="flex-1 bg-transparent outline-none"
-                style={{ fontSize: '14px', color: t.text }}
-              />
+              {(['recommend', 'history'] as InitTab[]).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className="flex-1 flex items-center justify-center border-0 border-b-2"
+                  style={{
+                    height: '38px', fontSize: '13px', fontWeight: activeTab === tab ? 600 : 400,
+                    color: activeTab === tab ? t.tabActive : t.tabInactive,
+                    borderBottomColor: activeTab === tab ? t.tabBorder : 'transparent',
+                    background: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {tab === 'recommend' ? '気になる？' : '履歴'}
+                </button>
+              ))}
             </div>
-          </div>
 
-          {/* Sub tabs */}
-          <div
-            className="flex flex-shrink-0"
-            style={{ borderBottom: '1px solid rgba(0,0,0,0.08)', paddingLeft: '16px' }}
-          >
-            {(['trend', 'user'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setSubTab(tab)}
-                style={{
-                  padding: '8px 20px',
-                  fontSize: '13px',
-                  fontWeight: subTab === tab ? 600 : 400,
-                  color: subTab === tab ? t.text : '#9ca3af',
-                  borderBottom: subTab === tab ? `2px solid ${t.dot}` : '2px solid transparent',
-                  background: 'transparent',
-                  transition: 'color 0.15s',
-                }}
-              >
-                {tab === 'trend' ? 'トレンド' : 'ユーザー'}
-              </button>
-            ))}
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto">
-            {subTab === 'trend' ? (
-              <div>
-                {TRENDS.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between px-4 py-3"
-                    style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}
-                  >
-                    <div>
-                      <p style={{ fontSize: '14px', fontWeight: 600, color: t.text }}>{item.tag}</p>
-                      <p style={{ fontSize: '11px', color: t.sub, marginTop: '1px' }}>{item.count}</p>
-                    </div>
-                    <span style={{ color: t.sub, fontSize: '18px' }}>›</span>
-                  </div>
-                ))}
-              </div>
+            {activeTab === 'recommend' ? (
+              recommendedTags.length === 0 ? (
+                <div
+                  className="flex flex-col items-center justify-center h-full"
+                  style={{ paddingBottom: '80px', gap: '12px' }}
+                >
+                  <span style={{ fontSize: '52px', lineHeight: 1 }}>🔍</span>
+                  <p style={{ fontSize: '17px', fontWeight: 700, color: t.text, marginTop: '4px' }}>
+                    誰かを探してみよう
+                  </p>
+                  <p style={{ fontSize: '13px', color: t.sub, textAlign: 'center', lineHeight: 1.6 }}>
+                    ユーザー名や #タグ で検索できます
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  {recommendedTags.map((item) => (
+                    <TagRow
+                      key={item.tag}
+                      tag={item.tag}
+                      count={item.count}
+                      t={t}
+                      onClick={() => setSelectedTag(item.tag)}
+                    />
+                  ))}
+                </div>
+              )
             ) : (
-              <div className="flex flex-col gap-2 p-3">
-                {USERS.map((user, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3"
-                    style={{ background: t.card, borderRadius: '14px', padding: '12px 14px' }}
-                  >
-                    <div
-                      style={{
-                        width: '44px', height: '44px', borderRadius: '50%',
-                        background: 'rgba(0,0,0,0.08)', flexShrink: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px',
-                      }}
-                    >
-                      {user.emoji}
-                    </div>
-                    <div>
-                      <p style={{ fontSize: '14px', fontWeight: 600, color: t.text }}>{user.name}</p>
-                      <p style={{ fontSize: '11px', color: t.sub, marginTop: '2px' }}>
-                        {user.tags.join('  ')}
-                      </p>
-                    </div>
-                  </div>
+              /* ── 履歴タブ ─────────────────────────────────────────── */
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 16px 4px' }}>
+                  <button className="border-0" style={{ fontSize: '12px', color: t.sub, background: 'none', cursor: 'pointer', padding: 0 }}>
+                    履歴を消去
+                  </button>
+                </div>
+                {MOCK_HISTORY.map((item) => (
+                  <TagRow
+                    key={item.tag}
+                    tag={item.tag}
+                    count={item.count}
+                    t={t}
+                    onClick={() => setSelectedTag(item.tag)}
+                  />
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      )}
+          </>
+        ) : (
+          /* ── Search results: 3-tab ────────────────────────────────── */
+          <>
+            {/* Search tab bar */}
+            <div
+              className="flex flex-shrink-0 border-b"
+              style={{ borderBottomColor: t.border }}
+            >
+              {(['tags', 'users', 'friends'] as SearchTab[]).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setSearchTab(tab)}
+                  className="flex-1 flex items-center justify-center border-0 border-b-2"
+                  style={{
+                    height: '38px', fontSize: '13px', fontWeight: searchTab === tab ? 600 : 400,
+                    color: searchTab === tab ? t.tabActive : t.tabInactive,
+                    borderBottomColor: searchTab === tab ? t.tabBorder : 'transparent',
+                    background: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {tab === 'tags' ? 'タグ' : tab === 'users' ? 'ユーザー' : 'フレンド'}
+                </button>
+              ))}
+            </div>
 
-      {/* ── Map tab ─────────────────────────────────────────────────── */}
-      {mainTab === 'map' && <MapTab t={t} />}
+            {/* Tab content */}
+            {searchTab === 'tags' && (
+              matchedTags.length === 0 ? (
+                <div
+                  className="flex flex-col items-center justify-center"
+                  style={{ paddingTop: '60px', paddingBottom: '80px', gap: '10px' }}
+                >
+                  <span style={{ fontSize: '40px', lineHeight: 1 }}>😶</span>
+                  <p style={{ fontSize: '15px', fontWeight: 600, color: t.text, marginTop: '4px' }}>
+                    見つかりませんでした
+                  </p>
+                  <p style={{ fontSize: '12px', color: t.sub }}>
+                    別のキーワードで試してみてください
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  {matchedTags.map((item) => (
+                    <TagRow
+                      key={item.tag}
+                      tag={item.tag}
+                      count={item.count}
+                      t={t}
+                      onClick={() => setSelectedTag(item.tag)}
+                    />
+                  ))}
+                </div>
+              )
+            )}
+
+            {searchTab === 'users' && (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {matchedUsers.map((user) => (
+                  <UserCard key={user.name} user={user} t={t} />
+                ))}
+              </div>
+            )}
+
+            {searchTab === 'friends' && (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {matchedFriends.map((friend) => (
+                  <UserCard key={friend.name} user={friend} t={t} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+    <TagRoom
+      tag={selectedTag ?? ''}
+      isOpen={selectedTag !== null}
+      onClose={() => setSelectedTag(null)}
+      onEnterRoom={onEnterRoom}
+    />
+    </>
+  )
+}
+
+// ── Tag row ───────────────────────────────────────────────────────────────────
+
+function TagRow({ tag, count, t, onClick }: {
+  tag: string
+  count: number
+  t: Theme
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="border-0 border-b"
+      style={{
+        display: 'flex', alignItems: 'center', width: '100%',
+        padding: '14px 16px', background: 'none',
+        borderBottomColor: t.border, cursor: 'pointer', textAlign: 'left',
+      }}
+    >
+      <span style={{ flex: 1, fontSize: '15px', fontWeight: 500, color: t.text }}>
+        #{tag}
+      </span>
+      <span style={{ fontSize: '13px', color: t.sub, marginRight: '8px' }}>
+        {fmtCount(count)}
+      </span>
+      <span style={{ fontSize: '16px', color: t.sub, lineHeight: 1 }}>›</span>
+    </button>
+  )
+}
+
+// ── User card ─────────────────────────────────────────────────────────────────
+
+function UserCard({ user, t }: {
+  user: { name: string; tags: string[]; commonTags: string[] }
+  t: Theme
+}) {
+  return (
+    <div
+      className="border-b"
+      style={{
+        display: 'flex', alignItems: 'center', gap: '12px',
+        padding: '12px 16px', borderBottomColor: t.border,
+      }}
+    >
+      <div
+        style={{
+          width: '42px', height: '42px', borderRadius: '50%', flexShrink: 0,
+          background: 'rgba(0,0,0,0.10)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '18px', fontWeight: 700, color: t.text,
+        }}
+      >
+        {user.name.slice(0, 1)}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: '14px', fontWeight: 600, color: t.text }}>{user.name}</p>
+        {user.commonTags.length > 0 && (() => {
+          const visible = user.commonTags.slice(0, 10)
+          const hidden  = user.commonTags.length - visible.length
+          return (
+            <p style={{ fontSize: '11px', marginTop: '3px' }}>
+              <span style={{ color: t.sub }}>共通 </span>
+              <span style={{ color: t.tabActive }}>
+                {visible.join('  ')}{hidden > 0 ? `  +${hidden}` : ''}
+              </span>
+            </p>
+          )
+        })()}
+      </div>
     </div>
   )
 }

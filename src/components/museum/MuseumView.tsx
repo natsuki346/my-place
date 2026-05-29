@@ -6,6 +6,8 @@ import { adventurer } from '@dicebear/collection'
 import type { Options } from '@dicebear/adventurer'
 import { SkyLayer } from '@/components/room/SkyLayer'
 import { useWorldStore } from '@/store/useWorldStore'
+import { useProfileStore } from '@/store/useProfileStore'
+import type { Gender } from '@/store/useProfileStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -191,6 +193,11 @@ const INITIAL_EMOJIS = ['🎵', '⭐', '🌙']
 const HAIR_SHORT = ['short01','short02','short03','short04','short05','short06','short07','short08','short09','short10']
 const HAIR_LONG  = ['long01','long02','long03','long04','long05','long06','long07','long08','long09','long10']
 
+const HAIR_MALE         = ['short01', 'short02', 'short03', 'mohawk']
+const HAIR_FEMALE       = ['long01', 'long02', 'long03', 'bun']
+const TOP_COLORS_MALE   = ['#3B82F6', '#1E40AF', '#1E293B', '#374151', '#6B7280', '#0F172A', '#94A3B8']
+const TOP_COLORS_FEMALE = ['#EC4899', '#F472B6', '#7C3AED', '#A855F7', '#FFFFFF', '#FDF2F8', '#DB2777']
+
 const EYE_VARIANTS     = ['variant01','variant02','variant03','variant04','variant05','variant06','variant07','variant08','variant09','variant10','variant11','variant12']
 const EYEBROW_VARIANTS = ['variant01','variant02','variant03','variant04','variant05','variant06','variant07','variant08','variant09','variant10']
 const MOUTH_VARIANTS   = ['variant01','variant02','variant03','variant04','variant05','variant06','variant07','variant08','variant09','variant10','variant11','variant12','variant13','variant14','variant15']
@@ -249,8 +256,10 @@ export function MuseumView() {
   const [editName,              setEditName]              = useState('')
   const [editId,                setEditId]                = useState('')
   const [editBio,               setEditBio]               = useState('')
+  const [editGender,            setEditGender]            = useState<Gender>('未設定')
 
   const { setView } = useWorldStore()
+  const { gender, setGender } = useProfileStore()
 
   const canvasRefs          = useRef<(HTMLDivElement | null)[]>([null, null, null])
   const activeCanvasRef     = useRef(0)
@@ -424,11 +433,11 @@ export function MuseumView() {
   }
 
   const openSubPage = (page: 'profile-edit' | 'tag-list' | 'connections') => {
-    if (page === 'profile-edit') { setEditName(displayName); setEditId(userId); setEditBio(bio) }
+    if (page === 'profile-edit') { setEditName(displayName); setEditId(userId); setEditBio(bio); setEditGender(gender) }
     setSubPage(page)
   }
   const saveProfileAndClose = () => {
-    setDisplayName(editName); setUserId(editId); setBio(editBio)
+    setDisplayName(editName); setUserId(editId); setBio(editBio); setGender(editGender)
     setSubPage(null)
   }
 
@@ -870,6 +879,26 @@ export function MuseumView() {
                   <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '6px', letterSpacing: '0.8px' }}>自己紹介</div>
                   <textarea value={editBio} onChange={e => setEditBio(e.target.value)} rows={3} style={{ ...INPUT_STYLE, resize: 'none', lineHeight: 1.6 }} placeholder="自己紹介を入力" />
                 </div>
+                <div style={{ marginTop: '20px' }}>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '8px', letterSpacing: '0.8px' }}>性別（任意）</div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {(['未設定', '男性', '女性'] as const).map(g => (
+                      <button
+                        key={g}
+                        onClick={() => setEditGender(g)}
+                        style={{
+                          padding: '8px 16px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer',
+                          background: editGender === g ? '#a78bfa' : 'rgba(255,255,255,0.08)',
+                          color: editGender === g ? 'white' : 'rgba(255,255,255,0.55)',
+                          border: `1px solid ${editGender === g ? '#a78bfa' : 'rgba(255,255,255,0.15)'}`,
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </SubPageWrapper>
           )}
@@ -1020,42 +1049,67 @@ export function MuseumView() {
 
             {editorTab === 'hair-style' && (
               <>
-                <SectionLabel>ショート</SectionLabel>
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '12px' }}>
-                  {HAIR_SHORT.map(hair => {
-                    const on = editingConfig.hair === hair
-                    return (
-                      <button key={hair} onClick={() => setEditingConfig(p => ({ ...p, hair }))} style={{
-                        flexShrink: 0, width: '64px', height: '72px', borderRadius: '10px',
-                        background: on ? 'rgba(124,58,237,0.20)' : 'rgba(255,255,255,0.05)',
-                        border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.10)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                        transition: 'all 0.15s', overflow: 'hidden', padding: '4px 0 2px',
-                      }}>
-                        <AvatarPreview config={{ ...editingConfig, hair }} size={48} pose="stand" />
-                        <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.38)' }}>{hair}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-                <SectionLabel>ロング</SectionLabel>
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
-                  {HAIR_LONG.map(hair => {
-                    const on = editingConfig.hair === hair
-                    return (
-                      <button key={hair} onClick={() => setEditingConfig(p => ({ ...p, hair }))} style={{
-                        flexShrink: 0, width: '64px', height: '72px', borderRadius: '10px',
-                        background: on ? 'rgba(124,58,237,0.20)' : 'rgba(255,255,255,0.05)',
-                        border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.10)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                        transition: 'all 0.15s', overflow: 'hidden', padding: '4px 0 2px',
-                      }}>
-                        <AvatarPreview config={{ ...editingConfig, hair }} size={48} pose="stand" />
-                        <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.38)' }}>{hair}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+                {gender !== '未設定' ? (
+                  <>
+                    <SectionLabel>{gender === '男性' ? '男性向け' : '女性向け'}</SectionLabel>
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
+                      {(gender === '男性' ? HAIR_MALE : HAIR_FEMALE).map(hair => {
+                        const on = editingConfig.hair === hair
+                        return (
+                          <button key={hair} onClick={() => setEditingConfig(p => ({ ...p, hair }))} style={{
+                            flexShrink: 0, width: '64px', height: '72px', borderRadius: '10px',
+                            background: on ? 'rgba(124,58,237,0.20)' : 'rgba(255,255,255,0.05)',
+                            border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.10)',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                            transition: 'all 0.15s', overflow: 'hidden', padding: '4px 0 2px',
+                          }}>
+                            <AvatarPreview config={{ ...editingConfig, hair }} size={48} pose="stand" />
+                            <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.38)' }}>{hair}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <SectionLabel>ショート</SectionLabel>
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '12px' }}>
+                      {HAIR_SHORT.map(hair => {
+                        const on = editingConfig.hair === hair
+                        return (
+                          <button key={hair} onClick={() => setEditingConfig(p => ({ ...p, hair }))} style={{
+                            flexShrink: 0, width: '64px', height: '72px', borderRadius: '10px',
+                            background: on ? 'rgba(124,58,237,0.20)' : 'rgba(255,255,255,0.05)',
+                            border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.10)',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                            transition: 'all 0.15s', overflow: 'hidden', padding: '4px 0 2px',
+                          }}>
+                            <AvatarPreview config={{ ...editingConfig, hair }} size={48} pose="stand" />
+                            <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.38)' }}>{hair}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <SectionLabel>ロング</SectionLabel>
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
+                      {HAIR_LONG.map(hair => {
+                        const on = editingConfig.hair === hair
+                        return (
+                          <button key={hair} onClick={() => setEditingConfig(p => ({ ...p, hair }))} style={{
+                            flexShrink: 0, width: '64px', height: '72px', borderRadius: '10px',
+                            background: on ? 'rgba(124,58,237,0.20)' : 'rgba(255,255,255,0.05)',
+                            border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.10)',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                            transition: 'all 0.15s', overflow: 'hidden', padding: '4px 0 2px',
+                          }}>
+                            <AvatarPreview config={{ ...editingConfig, hair }} size={48} pose="stand" />
+                            <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.38)' }}>{hair}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
               </>
             )}
 
@@ -1083,7 +1137,7 @@ export function MuseumView() {
               <>
                 <SectionLabel>上の色</SectionLabel>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '16px' }}>
-                  {CLOTHES_COLORS.map(c => (
+                  {(gender === '男性' ? TOP_COLORS_MALE : gender === '女性' ? TOP_COLORS_FEMALE : CLOTHES_COLORS).map(c => (
                     <button key={c} onClick={() => setEditingConfig(p => ({ ...p, topColor: c }))} style={{
                       width: '40px', height: '40px', borderRadius: '50%', background: c,
                       border: editingConfig.topColor === c ? '3px solid white' : '3px solid transparent',

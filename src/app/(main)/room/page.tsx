@@ -17,7 +17,7 @@ export default function RoomPage() {
     setView(v)
   }
 
-  const showingChatRoom = currentView === 'world' && activeRoom !== null
+  const showingChatRoom = activeRoom !== null
 
   return (
     <div
@@ -38,7 +38,7 @@ export default function RoomPage() {
       >
         {currentView === 'museum'  && <MuseumView />}
         {currentView === 'world'   && <DoorHall onEnterRoom={(key) => setActiveRoom(key)} />}
-        {currentView === 'explore' && <ExploreView />}
+        {currentView === 'explore' && <ExploreView onEnterRoom={(key) => setActiveRoom(key)} />}
       </div>
 
       {/* ── Bottom navigation ────────────────────────────────────── */}

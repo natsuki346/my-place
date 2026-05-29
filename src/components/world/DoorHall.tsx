@@ -74,6 +74,8 @@ type DoorRoom = { key: string; label: string; sublabel: string } & DoorCustom
 
 type CustomTab = 'door' | 'accent' | 'label' | 'knob'
 
+type DoorAnimState = 'idle' | 'pushing' | 'revealing' | 'fading'
+
 const DEFAULT_CUSTOM: DoorCustom = {
   doorColor:       '#8B6343',
   doorAccentColor: '#6B4C30',
@@ -149,18 +151,22 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   const onEnterRef   = useRef(onEnterRoom)
   onEnterRef.current = onEnterRoom
 
-  const [activeTab,        setActiveTab]        = useState('all')
-  const [period,           setPeriod]           = useState<Period>('night')
-  const [favorites,        setFavorites]        = useState<string[]>([])
-  const [showFavorites,    setShowFavorites]    = useState(false)
-  const [doors,            setDoors]            = useState<DoorRoom[]>(DEFAULT_DOORS)
-  const [customizingDoorId, setCustomizingDoorId] = useState<string | null>(null)
-  const [draftCustom,      setDraftCustom]      = useState<DoorCustom>(DEFAULT_CUSTOM)
-  const [customTab,        setCustomTab]        = useState<CustomTab>('door')
-  const [isLibraryOpen,    setIsLibraryOpen]    = useState(false)
+  const [activeTab,          setActiveTab]          = useState('all')
+  const [period,             setPeriod]             = useState<Period>('night')
+  const [favorites,          setFavorites]          = useState<string[]>([])
+  const [showFavorites,      setShowFavorites]      = useState(false)
+  const [doors,              setDoors]              = useState<DoorRoom[]>(DEFAULT_DOORS)
+  const [customizingDoorId,  setCustomizingDoorId]  = useState<string | null>(null)
+  const [draftCustom,        setDraftCustom]        = useState<DoorCustom>(DEFAULT_CUSTOM)
+  const [customTab,          setCustomTab]          = useState<CustomTab>('door')
+  const [isLibraryOpen,      setIsLibraryOpen]      = useState(false)
+  const [selectedDoor,       setSelectedDoor]       = useState<string | null>(null)
+  const [doorAnimState,      setDoorAnimState]      = useState<DoorAnimState>('idle')
 
-  const favoritesRef = useRef<string[]>([])
-  favoritesRef.current = favorites
+  const favoritesRef    = useRef<string[]>([])
+  favoritesRef.current  = favorites
+
+  const selectedDoorRef = useRef<string | null>(null)
 
   const theme    = THEMES[period]
   const themeRef = useRef<Theme>(theme)
@@ -185,16 +191,41 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   const dragStartScroll  = useRef(0)
   const didDrag          = useRef(false)
 
-  // Door opening animation
-  const openingDoor  = useRef<string | null>(null)
-  const doorProgress = useRef(0)
-
   const handleTabChange = (key: string) => {
     setActiveTab(key)
-    scrollXRef.current   = 0
-    openingDoor.current  = null
-    doorProgress.current = 0
+    scrollXRef.current    = 0
+    selectedDoorRef.current = null
+    setSelectedDoor(null)
+    setDoorAnimState('idle')
   }
+
+  // Door transition animation lifecycle
+  useEffect(() => {
+    if (!selectedDoor) return
+
+    let t1: ReturnType<typeof setTimeout>
+    let t2: ReturnType<typeof setTimeout>
+    let t3: ReturnType<typeof setTimeout>
+
+    const raf = requestAnimationFrame(() => {
+      setDoorAnimState('pushing')
+      t1 = setTimeout(() => setDoorAnimState('revealing'), 350)
+      t2 = setTimeout(() => setDoorAnimState('fading'),    600)
+      t3 = setTimeout(() => {
+        onEnterRef.current(selectedDoor)
+        setSelectedDoor(null)
+        selectedDoorRef.current = null
+        setDoorAnimState('idle')
+      }, 850)
+    })
+
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(t1!)
+      clearTimeout(t2!)
+      clearTimeout(t3!)
+    }
+  }, [selectedDoor])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -214,7 +245,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
 
     // ── Tap detection ─────────────────────────────────────────────
     const handleTap = (canvasX: number, canvasY: number) => {
-      if (openingDoor.current) return
+      if (selectedDoorRef.current) return
       const doors     = doorsRef.current
       const loopWidth = doors.length * DOOR_GAP
       const effScroll = ((scrollXRef.current % loopWidth) + loopWidth) % loopWidth
@@ -240,8 +271,8 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
             canvasX >= dcx - DOOR_W / 2 && canvasX <= dcx + DOOR_W / 2 &&
             canvasY >= doorTopY && canvasY <= doorTopY + DOOR_H
           ) {
-            openingDoor.current  = door.key
-            doorProgress.current = 0
+            selectedDoorRef.current = door.key
+            setSelectedDoor(door.key)
             return
           }
         }
@@ -313,22 +344,9 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
       const doors     = doorsRef.current
       const loopWidth = doors.length * DOOR_GAP
 
-      if (openingDoor.current) {
-        doorProgress.current = Math.min(1, doorProgress.current + 0.04)
-        if (doorProgress.current >= 0.5) {
-          const key = openingDoor.current
-          openingDoor.current  = null
-          doorProgress.current = 0
-          onEnterRef.current(key)
-          animId = requestAnimationFrame(draw)
-          return
-        }
-      }
-
-      const effScroll   = ((scrollXRef.current % loopWidth) + loopWidth) % loopWidth
-      const doorTopY    = (H - DOOR_H) / 2
-      const doorCenterY = doorTopY + DOOR_H / 2
-      const startX      = (W - doors.length * DOOR_GAP) / 2 + DOOR_GAP / 2
+      const effScroll = ((scrollXRef.current % loopWidth) + loopWidth) % loopWidth
+      const doorTopY  = (H - DOOR_H) / 2
+      const startX    = (W - doors.length * DOOR_GAP) / 2 + DOOR_GAP / 2
 
       drawBackground(ctx, W, H, doorTopY, themeRef.current)
 
@@ -339,18 +357,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
 
           if (dcx + DOOR_W / 2 + 60 < 0 || dcx - DOOR_W / 2 - 60 > W) continue
 
-          const isOpening = openingDoor.current === door.key
-          const progress  = isOpening ? doorProgress.current : 0
-
-          ctx.save()
-          if (isOpening) {
-            ctx.translate(dcx, doorCenterY)
-            ctx.scale(Math.max(0.001, 1 - progress), 1)
-            ctx.translate(-dcx, -doorCenterY)
-          }
-
-          renderDoor(ctx, dcx, doorTopY, door, isOpening, progress, themeRef.current, favoritesRef.current.includes(door.key))
-          ctx.restore()
+          renderDoor(ctx, dcx, doorTopY, door, themeRef.current, favoritesRef.current.includes(door.key))
         }
       }
 
@@ -377,6 +384,13 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
     evening:   'bg-orange-500',
     night:     'bg-purple-600',
   }
+
+  // Door overlay preview dimensions
+  const PREV_W = 160, PREV_H = 256
+
+  const selectedDoorData = selectedDoor ? doors.find(d => d.key === selectedDoor) ?? null : null
+  const isOverlayVisible = selectedDoor !== null
+  const isDoorPushed     = doorAnimState === 'pushing' || doorAnimState === 'revealing' || doorAnimState === 'fading'
 
   return (
     <div className={`flex flex-col bg-gradient-to-b ${theme.bg}`} style={{ height: '100%', position: 'relative' }}>
@@ -631,6 +645,65 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
           </div>
         </>
       )}
+
+      {/* ── Door transition overlay ──────────────────────────────── */}
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 200,
+          maxWidth: '390px',
+          margin: '0 auto',
+          overflow: 'hidden',
+          pointerEvents: isOverlayVisible ? 'all' : 'none',
+          opacity: isOverlayVisible ? 1 : 0,
+        }}
+      >
+        {/* Dark room background */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: '#080510',
+          zIndex: 0,
+        }} />
+
+        {/* Room light — amber radial, starts fading in as door opens */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'radial-gradient(ellipse at 50% 55%, rgba(255,240,200,0.85) 0%, rgba(255,210,120,0.4) 35%, transparent 70%)',
+          opacity: doorAnimState !== 'idle' ? 1 : 0,
+          transition: doorAnimState !== 'idle' ? 'opacity 300ms ease 350ms' : 'none',
+          zIndex: 1,
+        }} />
+
+        {/* Door panel — left-axis push into the room */}
+        {selectedDoorData && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            perspective: '800px',
+            zIndex: 2,
+          }}>
+            <div style={{
+              transformOrigin: 'left center',
+              transform:       isDoorPushed
+                ? 'rotateY(70deg)'
+                : 'rotateY(0deg)',
+              transition:      doorAnimState === 'pushing' ? 'transform 550ms ease-in' : 'none',
+            }}>
+              <DoorPreview custom={selectedDoorData} W={PREV_W} H={PREV_H} />
+            </div>
+          </div>
+        )}
+
+        {/* Fade-to-black */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: '#000',
+          opacity: doorAnimState === 'fading' ? 1 : 0,
+          transition: doorAnimState === 'fading' ? 'opacity 300ms ease' : 'none',
+          zIndex: 3,
+        }} />
+      </div>
     </div>
   )
 }
@@ -848,8 +921,6 @@ function renderDoor(
   cx: number,
   topY: number,
   door: Door,
-  isOpening: boolean,
-  progress: number,
   theme: Theme,
   isFavorite: boolean,
 ) {
@@ -890,12 +961,6 @@ function renderDoor(
     ctx.font = 'bold 13px system-ui, sans-serif'
     ctx.fillStyle = hexToRgba(theme.glow, 0.65)
     ctx.fillText('追加する', cx, topY + h * 0.64)
-
-    // Opening flash
-    if (isOpening && progress > 0) {
-      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.92, progress * 0.85)})`
-      ctx.fillRect(x, topY, w, h)
-    }
     return
   }
 
@@ -980,12 +1045,6 @@ function renderDoor(
   ctx.textBaseline = 'middle'
   ctx.fillStyle = isFavorite ? '#fbbf24' : 'rgba(255,255,255,0.55)'
   ctx.fillText(isFavorite ? '★' : '☆', cx + DOOR_W / 2 - 14, topY + 14)
-
-  // Opening flash
-  if (isOpening && progress > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${Math.min(0.92, progress * 0.85)})`
-    ctx.fillRect(x, topY, w, h)
-  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1037,4 +1096,3 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 function rgbToHex(r: number, g: number, b: number): string {
   return '#' + [r, g, b].map(x => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0')).join('')
 }
-

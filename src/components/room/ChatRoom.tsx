@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createAvatar } from '@dicebear/core'
 import { adventurer } from '@dicebear/collection'
+import { useTagStore } from '@/store/useTagStore'
 
 // ── Period & Theme ────────────────────────────────────────────────────────────
 
@@ -268,6 +269,8 @@ const ALL_PARTICIPANT_TAGS  = ['#充電中','#読書','#内向型','#ひとり�
 const MY_TAGS          = ['#充電中', '#読書', '#夜型', '#内向型', '#音楽好き']
 const MY_IDENTITY_TAGS = ['#夜型', '#音楽好き', '#猫派', '#インドア']
 
+const REACTION_EMOJIS = ['😂', '🥲', '👀', '🤝', '🌙', '✨'] as const
+
 const MOCK_COMMENTS: CommentItem[] = [
   { id: '1', user: 'kaze', color: '#818cf8', text: 'わかりすぎる', time: '今' },
   { id: '2', user: 'suki', color: '#f472b6', text: '毎日そう思ってる', time: '1分前' },
@@ -275,11 +278,15 @@ const MOCK_COMMENTS: CommentItem[] = [
 
 // ── ChatRoom ──────────────────────────────────────────────────────────────────
 
-type Props = { roomKey: string; onBack: () => void }
+type Props = { roomKey?: string; roomId?: string; roomName?: string; tagName?: string; onBack: () => void; forceLocked?: boolean }
 type ChatTab = 'timeline' | 'chat'
 
-export function ChatRoom({ roomKey, onBack }: Props) {
-  const meta       = ROOM_META[roomKey] ?? { label: roomKey, dot: '#a78bfa', members: '', type: 'my' as RoomType }
+export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagNameProp, onBack, forceLocked = false }: Props) {
+  const roomKey  = (roomKeyProp && ROOM_META[roomKeyProp]) ? roomKeyProp
+                 : (roomId && ROOM_META[roomId]) ? roomId
+                 : 'id2'
+  const baseMeta = ROOM_META[roomKey] ?? { label: roomKey, dot: '#a78bfa', members: '', type: 'identity' as RoomType }
+  const meta     = roomName ? { ...baseMeta, label: roomName } : baseMeta
   const isIdentity = meta.type === 'identity'
   const hasTabs    = meta.type === 'friend'
 
@@ -289,6 +296,12 @@ export function ChatRoom({ roomKey, onBack }: Props) {
     setPeriod(getPeriod(new Date().getHours()))
   }, [])
   const t = THEME[period]
+
+  // Tag follow state
+  const { followTag, unfollowTag, isFollowing } = useTagStore()
+  const internalTagName = meta.label.startsWith('#') ? meta.label.slice(1) : meta.label
+  const tagName  = (forceLocked && tagNameProp) ? tagNameProp : internalTagName
+  const following = isIdentity && isFollowing(tagName)
 
   // ── Identity: subroom list state ─────────────────────────────────
   const [activeSubRoom, setActiveSubRoom]       = useState<SubRoom | null>(null)
@@ -300,7 +313,6 @@ export function ChatRoom({ roomKey, onBack }: Props) {
   // ── Identity: timeline state ─────────────────────────────────────
   const [timelinePosts, setTimelinePosts]     = useState<TimelinePost[]>(TIMELINE_POSTS[roomKey] ?? [])
   const [timelineFilter, setTimelineFilter]   = useState<'all' | 'friend'>('all')
-  const [likeMap, setLikeMap]                 = useState<Record<string, boolean>>({})
   const [selectedPost, setSelectedPost]       = useState<TimelinePost | null>(null)
   const [commentMap, setCommentMap]           = useState<Record<string, CommentItem[]>>({})
   const [commentInput, setCommentInput]       = useState('')
@@ -405,10 +417,6 @@ export function ChatRoom({ roomKey, onBack }: Props) {
     setCommentInput('')
   }
 
-  const toggleLike = (postId: string) => {
-    setLikeMap(prev => ({ ...prev, [postId]: !prev[postId] }))
-  }
-
   const openUserProfile = (name: string) => {
     const profile = dummyProfiles[name] ?? { bio: `${name}さん`, tags: [], color: '#a78bfa' }
     setViewingUser({ name, ...profile })
@@ -433,37 +441,61 @@ export function ChatRoom({ roomKey, onBack }: Props) {
         >
           <button onClick={onBack} style={{ color: t.accent, fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
           <p className="flex-1 min-w-0 text-center" style={{ color: t.text, fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
-          <button
-            onClick={() => setIsParticipantsOpen(true)}
-            className="flex items-center gap-1.5 flex-shrink-0"
-            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-          >
-            <span style={{ color: meta.dot, fontSize: '10px', animation: 'blink 1.4s ease-in-out infinite' }}>●</span>
-            <span style={{ color: t.subText, fontSize: '11px', textDecoration: 'underline', textDecorationColor: `${t.subText}55` }}>{meta.members}人がいる</span>
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {forceLocked ? (
+              following ? (
+                <button onClick={() => unfollowTag(tagName)}
+                  style={{ fontSize: '11px', color: t.dimText, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '3px 10px', background: 'none', cursor: 'pointer' }}>
+                  フォロー中
+                </button>
+              ) : (
+                <button onClick={() => followTag(tagName)}
+                  style={{ fontSize: '11px', color: '#fff', border: 'none', borderRadius: '12px', padding: '3px 10px', background: t.accent, cursor: 'pointer' }}>
+                  フォローして参加
+                </button>
+              )
+            ) : (
+              following && (
+                <button onClick={() => unfollowTag(tagName)}
+                  style={{ fontSize: '11px', color: t.dimText, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '3px 10px', background: 'none', cursor: 'pointer' }}>
+                  フォロー中
+                </button>
+              )
+            )}
+            <button
+              onClick={() => setIsParticipantsOpen(true)}
+              className="flex items-center gap-1.5"
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              <span style={{ color: meta.dot, fontSize: '10px', animation: 'blink 1.4s ease-in-out infinite' }}>●</span>
+              <span style={{ color: t.subText, fontSize: '11px', textDecoration: 'underline', textDecorationColor: `${t.subText}55` }}>{meta.members}人がいる</span>
+            </button>
+          </div>
         </header>
 
         {/* ルーム / タイムライン tabs */}
-        <div
-          className="flex flex-shrink-0"
-          style={{ height: '36px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}
-        >
-          {(['rooms', 'timeline'] as const).map(tb => (
-            <button key={tb} onClick={() => setActiveListTab(tb)} className="flex-1 flex items-center justify-center"
-              style={{
-                fontSize: '12px',
-                color: activeListTab === tb ? t.tabActive : t.tabInactive,
-                borderBottom: activeListTab === tb ? `2px solid ${t.tabBorder}` : '2px solid transparent',
-                fontWeight: activeListTab === tb ? 600 : 400,
-              }}>
-              {tb === 'rooms' ? 'ルーム' : 'タイムライン'}
-            </button>
-          ))}
-        </div>
+        {!forceLocked && (
+          <div
+            className="flex flex-shrink-0"
+            style={{ height: '36px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}
+          >
+            {(['rooms', 'timeline'] as const).map(tb => (
+              <button key={tb} onClick={() => setActiveListTab(tb)} className="flex-1 flex items-center justify-center"
+                style={{
+                  fontSize: '12px',
+                  color: activeListTab === tb ? t.tabActive : t.tabInactive,
+                  borderBottom: activeListTab === tb ? `2px solid ${t.tabBorder}` : '2px solid transparent',
+                  fontWeight: activeListTab === tb ? 600 : 400,
+                }}>
+                {tb === 'rooms' ? 'ルーム' : 'タイムライン'}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
-          {activeListTab === 'rooms' ? (
+          {(forceLocked || activeListTab === 'rooms') ? (
             <>
               {/* Sub-rooms */}
               {subRooms.map(sub =>
@@ -487,6 +519,20 @@ export function ChatRoom({ roomKey, onBack }: Props) {
                 )
               )}
             </>
+          ) : !following ? (
+            /* ── Follow gate ─────────────────────────────────────── */
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '72px 32px', gap: '16px', textAlign: 'center' }}>
+              <span style={{ fontSize: '48px', lineHeight: 1 }}>🔒</span>
+              <button
+                onClick={() => followTag(tagName)}
+                style={{ padding: '12px 28px', borderRadius: '24px', background: t.accent, color: '#fff', fontSize: '15px', fontWeight: 700, boxShadow: `0 4px 14px ${t.accent}55`, cursor: 'pointer', border: 'none' }}
+              >
+                フォローして参加する
+              </button>
+              <p style={{ color: t.dimText, fontSize: '12px', lineHeight: 1.8 }}>
+                フォローするとタイムラインと<br />投稿が解放されます
+              </p>
+            </div>
           ) : (
             <>
               {/* ALL / フレンド toggle */}
@@ -505,9 +551,6 @@ export function ChatRoom({ roomKey, onBack }: Props) {
                 <PostCard
                   key={post.id}
                   post={post}
-                  liked={likeMap[post.id] ?? false}
-                  likeCount={(post.likes ?? 0) + (likeMap[post.id] ? 1 : 0)}
-                  onToggleLike={() => toggleLike(post.id)}
                   commentCount={(commentMap[post.id] ?? MOCK_COMMENTS).length}
                   onComment={() => { setSelectedPost(post); setCommentInput('') }}
                   onAvatarTap={() => openUserProfile(post.user)}
@@ -519,13 +562,13 @@ export function ChatRoom({ roomKey, onBack }: Props) {
         </div>
 
         {/* FAB */}
-        {activeListTab === 'rooms' && (
+        {!forceLocked && activeListTab === 'rooms' && (
           <button onClick={() => setIsCreating(true)} className="flex items-center justify-center"
             style={{ position: 'absolute', bottom: '80px', right: '16px', width: '52px', height: '52px', borderRadius: '50%', background: t.accent, color: '#fff', fontSize: '22px', boxShadow: `0 4px 14px ${t.accent}66`, zIndex: 10 }}>
             💬
           </button>
         )}
-        {activeListTab === 'timeline' && (
+        {!forceLocked && activeListTab === 'timeline' && following && (
           <button onClick={() => { setIsPosting(true); setSelectedPostTag(subRooms.find(s => s.id !== 'all')?.tag ?? '') }}
             className="flex items-center justify-center"
             style={{ position: 'absolute', bottom: '80px', right: '16px', width: '48px', height: '48px', borderRadius: '50%', background: t.accent, color: '#fff', fontSize: '20px', boxShadow: `0 4px 12px ${t.accent}66`, zIndex: 10 }}>
@@ -539,7 +582,7 @@ export function ChatRoom({ roomKey, onBack }: Props) {
             <p style={{ color: t.text, fontSize: '15px', fontWeight: 600, marginBottom: '16px' }}>新しいルームを作成</p>
             <div className="flex items-center" style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: '8px', padding: '10px 12px' }}>
               <span style={{ color: t.accent, fontSize: '18px', fontWeight: 700, marginRight: '4px' }}>#</span>
-              <input value={newRoomName} onChange={e => setNewRoomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateRoom() }} placeholder="ルーム名を入力" autoFocus
+              <input value={newRoomName} onChange={e => setNewRoomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleCreateRoom() }} placeholder="ルーム名を入力"
                 style={{ flex: 1, background: 'transparent', border: 'none', color: t.inputText, fontSize: '16px', outline: 'none' }} />
             </div>
             <button onClick={handleCreateRoom} disabled={!newRoomName.trim()}
@@ -701,15 +744,24 @@ export function ChatRoom({ roomKey, onBack }: Props) {
 
       {/* Bottom: input */}
       {showBottom && (
-        <div className="flex-shrink-0 flex items-center gap-2 px-3"
-          style={{ height: '56px', background: t.headerBg, borderTop: `1px solid ${t.border}` }}>
-          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown}
-            placeholder="メッセージを入力..."
-            style={{ flex: 1, background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: '20px', padding: '8px 14px', fontSize: '13px', color: t.inputText, outline: 'none' }} />
-          <button onClick={send} disabled={!input.trim()} className="flex items-center justify-center flex-shrink-0 transition-opacity disabled:opacity-35"
-            style={{ width: '36px', height: '36px', borderRadius: '50%', background: t.accent, color: '#fff', fontSize: '16px' }}>
-            ↑
-          </button>
+        <div className="flex-shrink-0" style={{ background: t.headerBg, borderTop: `1px solid ${t.border}` }}>
+          {forceLocked && (
+            <p style={{ fontSize: '11px', color: t.dimText, textAlign: 'center', padding: '6px 16px 0' }}>
+              フォローすると投稿できます
+            </p>
+          )}
+          <div className="flex items-center gap-2 px-3" style={{ height: '56px' }}>
+            <input value={input} onChange={e => { if (!forceLocked) setInput(e.target.value) }}
+              onKeyDown={!forceLocked ? onKeyDown : undefined}
+              disabled={forceLocked}
+              placeholder="メッセージを入力..."
+              style={{ flex: 1, background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: '20px', padding: '8px 14px', fontSize: '13px', color: t.inputText, outline: 'none', opacity: forceLocked ? 0.5 : 1 }} />
+            <button onClick={!forceLocked ? send : undefined} disabled={!input.trim() || forceLocked}
+              className="flex items-center justify-center flex-shrink-0 transition-opacity disabled:opacity-35"
+              style={{ width: '36px', height: '36px', borderRadius: '50%', background: t.accent, color: '#fff', fontSize: '16px' }}>
+              ↑
+            </button>
+          </div>
         </div>
       )}
 
@@ -723,18 +775,49 @@ export function ChatRoom({ roomKey, onBack }: Props) {
 
 type PostCardProps = {
   post: TimelinePost
-  liked: boolean
-  likeCount: number
-  onToggleLike: () => void
   commentCount: number
   onComment: () => void
   onAvatarTap: () => void
   t: PT
 }
 
-function PostCard({ post, liked, likeCount, onToggleLike, commentCount, onComment, onAvatarTap, t }: PostCardProps) {
+function PostCard({ post, commentCount, onComment, onAvatarTap, t }: PostCardProps) {
+  const [myReactions,  setMyReactions]  = useState<Set<string>>(new Set())
+  const [allReactions, setAllReactions] = useState<string[]>([])
+  const [showPicker,   setShowPicker]   = useState(false)
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    // Seed deterministic initial reactions from "others" based on post id
+    const code  = post.id.charCodeAt(0)
+    const count = code % 3
+    const seeds: string[] = []
+    for (let i = 0; i < count; i++) {
+      seeds.push(REACTION_EMOJIS[(code + i * 2) % REACTION_EMOJIS.length])
+    }
+    setAllReactions(seeds)
+  }, [post.id])
+
+  const toggleReaction = (emoji: string) => {
+    setMyReactions(prev => {
+      const next = new Set(prev)
+      if (next.has(emoji)) { next.delete(emoji) } else { next.add(emoji) }
+      return next
+    })
+    setAllReactions(prev => prev.includes(emoji) ? prev : [...prev, emoji])
+    setShowPicker(false)
+  }
+
+  const onPressStart = () => {
+    pressTimer.current = setTimeout(() => setShowPicker(true), 500)
+  }
+  const onPressEnd = () => {
+    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null }
+  }
+
   return (
     <div style={{ padding: '14px 16px', borderBottom: `1px solid ${t.cardBorder}`, background: t.cardBg, borderLeft: post.isFriend ? `2px solid ${post.color}` : undefined }}>
+      {/* Header */}
       <div className="flex items-center" style={{ gap: '8px' }}>
         <button onClick={onAvatarTap} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}>
           <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: post.color, fontSize: '11px', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -745,17 +828,77 @@ function PostCard({ post, liked, likeCount, onToggleLike, commentCount, onCommen
         <span style={{ background: t.tagBg, color: t.tagText, fontSize: '10px', padding: '2px 8px', borderRadius: '10px', border: `1px solid ${t.tagBorder}`, flexShrink: 0 }}>{post.tag}</span>
         <span style={{ color: t.dimText, fontSize: '10px', marginLeft: 'auto', flexShrink: 0 }}>{post.time}</span>
       </div>
-      <p style={{ color: t.text, fontSize: '13px', lineHeight: '1.6', marginTop: '8px', wordBreak: 'break-word' }}>{post.text}</p>
-      <div className="flex" style={{ justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-        <button onClick={onToggleLike} className="flex items-center gap-1">
-          <span style={{ fontSize: '13px' }}>{liked ? '❤️' : '🤍'}</span>
-          <span style={{ color: liked ? t.likeActive : t.dimText, fontSize: '12px' }}>{likeCount}</span>
+
+      {/* Text — long-press opens picker */}
+      <p
+        style={{ color: t.text, fontSize: '13px', lineHeight: '1.6', marginTop: '8px', wordBreak: 'break-word', userSelect: 'none' }}
+        onMouseDown={onPressStart} onMouseUp={onPressEnd} onMouseLeave={onPressEnd}
+        onTouchStart={onPressStart} onTouchEnd={onPressEnd} onTouchCancel={onPressEnd}
+      >
+        {post.text}
+      </p>
+
+      {/* Reaction chips */}
+      {allReactions.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+          {allReactions.map(emoji => (
+            <button
+              key={emoji}
+              onClick={() => toggleReaction(emoji)}
+              style={{
+                fontSize: '15px', lineHeight: 1.2,
+                padding: '3px 8px', borderRadius: '12px', cursor: 'pointer',
+                background: myReactions.has(emoji)
+                  ? (t.isNight ? 'rgba(167,139,250,0.22)' : 'rgba(0,0,0,0.07)')
+                  : 'transparent',
+                border: `1px solid ${myReactions.has(emoji) ? t.accent + '66' : t.cardBorder}`,
+                opacity: myReactions.has(emoji) ? 1 : 0.55,
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Action row */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px', marginTop: '8px', alignItems: 'center' }}>
+        <button
+          onClick={() => setShowPicker(p => !p)}
+          style={{ fontSize: '14px', color: showPicker ? t.accent : t.dimText, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          😊
         </button>
-        <button onClick={onComment} className="flex items-center gap-1">
-          <span style={{ fontSize: '13px' }}>💬</span>
-          <span style={{ color: t.dimText, fontSize: '12px' }}>{commentCount}</span>
+        <button onClick={onComment} style={{ fontSize: '14px', lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          💬
         </button>
       </div>
+
+      {/* Emoji picker */}
+      {showPicker && (
+        <div style={{
+          display: 'flex', gap: '6px', justifyContent: 'center',
+          marginTop: '8px', padding: '8px 12px', borderRadius: '16px',
+          background: t.isNight ? 'rgba(30,21,67,0.95)' : 'rgba(243,244,246,0.97)',
+          border: `1px solid ${t.border}`,
+        }}>
+          {REACTION_EMOJIS.map(emoji => (
+            <button
+              key={emoji}
+              onClick={() => toggleReaction(emoji)}
+              style={{
+                fontSize: '20px', lineHeight: 1, padding: '4px 6px', borderRadius: '8px', cursor: 'pointer',
+                background: myReactions.has(emoji)
+                  ? (t.isNight ? 'rgba(167,139,250,0.25)' : 'rgba(0,0,0,0.08)')
+                  : 'none',
+                border: 'none',
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
