@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { SkyLayer } from '@/components/room/SkyLayer'
+import { useWorldStore } from '@/store/useWorldStore'
 
 // ── Period ────────────────────────────────────────────────────────────────────
 
@@ -108,6 +110,8 @@ const TABS = [
   { key: 'friends',  label: 'フレンド' },
 ]
 
+const UNREAD_DOORS = new Set(['id1', 'id2'])
+
 const TAB_FILTER: Record<string, string[]> = {
   all:      DEFAULT_DOORS.map(d => d.key),
   identity: ['id1', 'id2', 'id3', 'add'],
@@ -152,6 +156,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   onEnterRef.current = onEnterRoom
 
   const [activeTab,          setActiveTab]          = useState('all')
+  const [hour,               setHour]               = useState(0)
   const [period,             setPeriod]             = useState<Period>('night')
   const [favorites,          setFavorites]          = useState<string[]>([])
   const [showFavorites,      setShowFavorites]      = useState(false)
@@ -172,10 +177,21 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   const themeRef = useRef<Theme>(theme)
   themeRef.current = theme
 
+  const setSubPageOpen = useWorldStore(s => s.setSubPageOpen)
+  useEffect(() => {
+    setSubPageOpen(isLibraryOpen)
+  }, [isLibraryOpen, setSubPageOpen])
+
   // Sync period on mount + every minute
   useEffect(() => {
-    setPeriod(getPeriod(new Date().getHours()))
-    const id = setInterval(() => setPeriod(getPeriod(new Date().getHours())), 60_000)
+    const h = new Date().getHours()
+    setHour(h)
+    setPeriod(getPeriod(h))
+    const id = setInterval(() => {
+      const hh = new Date().getHours()
+      setHour(hh)
+      setPeriod(getPeriod(hh))
+    }, 60_000)
     return () => clearInterval(id)
   }, [])
 
@@ -357,7 +373,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
 
           if (dcx + DOOR_W / 2 + 60 < 0 || dcx - DOOR_W / 2 - 60 > W) continue
 
-          renderDoor(ctx, dcx, doorTopY, door, themeRef.current, favoritesRef.current.includes(door.key))
+          renderDoor(ctx, dcx, doorTopY, door, themeRef.current, favoritesRef.current.includes(door.key), UNREAD_DOORS.has(door.key))
         }
       }
 
@@ -393,7 +409,8 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   const isDoorPushed     = doorAnimState === 'pushing' || doorAnimState === 'revealing' || doorAnimState === 'fading'
 
   return (
-    <div className={`flex flex-col bg-gradient-to-b ${theme.bg}`} style={{ height: '100%', position: 'relative' }}>
+    <div className="flex flex-col" style={{ height: '100%', position: 'relative', overflow: 'hidden' }}>
+      <SkyLayer hour={hour} />
       {/* ── Tab bar ───────────────────────────────────────────────── */}
       <div className="flex items-center justify-center gap-2 px-4 py-3 flex-shrink-0">
         {TABS.map(tab => {
@@ -404,7 +421,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
               onClick={() => handleTabChange(tab.key)}
               className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
                 active
-                  ? `${tabActiveBg[period]} text-white font-bold`
+                  ? `${tabActiveBg[period]} text-white font-semibold`
                   : theme.dark ? 'text-white/75 font-medium' : 'text-gray-800 font-medium'
               }`}
             >
@@ -434,7 +451,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
       </div>
 
       {/* ── 図鑑ボタン ───────────────────────────────────────────── */}
-      <div className="flex-shrink-0 flex justify-center py-2">
+      <div className="flex-shrink-0 flex justify-center py-2 mb-32">
         <button
           onClick={() => setIsLibraryOpen(true)}
           style={{ background: 'rgba(255,255,255,0.82)', borderRadius: '999px', padding: '7px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.14)', fontSize: '13px', fontWeight: 600, color: '#374151', display: 'flex', alignItems: 'center', gap: '6px', backdropFilter: 'blur(6px)' }}
@@ -488,7 +505,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
             <div style={{
               position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
               width: '100%', maxWidth: '390px', maxHeight: '72dvh',
-              background: bg, borderRadius: '16px 16px 0 0',
+              background: bg, borderRadius: '24px 24px 0 0',
               zIndex: 101, display: 'flex', flexDirection: 'column',
             }}>
               {/* Handle */}
@@ -594,7 +611,7 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
             position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
             width: '100%', maxWidth: '390px', maxHeight: '60dvh',
             background: theme.dark ? '#1e1b4b' : '#ffffff',
-            borderRadius: '16px 16px 0 0',
+            borderRadius: '24px 24px 0 0',
             zIndex: 101, display: 'flex', flexDirection: 'column',
           }}>
             {/* Handle */}
@@ -718,9 +735,16 @@ type DoorLibraryProps = {
   theme: Theme
 }
 
+const LIBRARY_TABS = [
+  { key: 'all',      label: 'すべて' },
+  { key: 'identity', label: 'アイデンティティ' },
+  { key: 'friends',  label: 'フレンド' },
+] as const
+
 function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryProps) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [draftMap,    setDraftMap]    = useState<Record<string, DoorCustom>>({})
+  const [libraryTab,  setLibraryTab]  = useState<'all' | 'identity' | 'friends'>('all')
 
   const pickerRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
@@ -756,11 +780,18 @@ function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryP
   const updateColor = (doorKey: string, field: keyof DoorCustom, hex: string) =>
     setDraftMap(prev => ({ ...prev, [doorKey]: { ...prev[doorKey], [field]: hex } }))
 
-  const displayDoors = doors.filter(d => d.key !== 'add')
+  const displayDoors = doors.filter(d => {
+    if (d.key === 'add') return false
+    if (libraryTab === 'identity') return d.key.startsWith('id')
+    if (libraryTab === 'friends')  return d.key === 'myroom' || d.key.startsWith('friend')
+    return true
+  })
 
   return (
     <div style={{
-      position: 'absolute', inset: 0, zIndex: 70,
+      position: 'absolute',
+      inset: 0,
+      zIndex: 70,
       background: bg,
       transform: `translateX(${isOpen ? '0%' : '100%'})`,
       transition: 'transform 0.3s ease',
@@ -771,6 +802,27 @@ function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryP
         <button onClick={onClose} style={{ color: accent, fontSize: '14px', background: 'none', border: 'none', cursor: 'pointer', minWidth: 60, textAlign: 'left' }}>← 戻る</button>
         <span style={{ flex: 1, textAlign: 'center', color: textCol, fontSize: '15px', fontWeight: 600 }}>📚 図鑑</span>
         <span style={{ minWidth: 60 }} />
+      </div>
+
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: '8px', padding: '10px 16px', borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
+        {LIBRARY_TABS.map(tab => {
+          const active = libraryTab === tab.key
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setLibraryTab(tab.key)}
+              style={{
+                flex: 1, textAlign: 'center',
+                padding: '5px 0', borderRadius: '999px', fontSize: '12px', fontWeight: active ? 700 : 400,
+                background: active ? accent : 'transparent',
+                color: active ? '#ffffff' : subCol,
+                border: `1px solid ${active ? accent : border}`,
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >{tab.label}</button>
+          )
+        })}
       </div>
 
       {/* Door list */}
@@ -885,33 +937,7 @@ function drawBackground(
   doorTopY: number,
   theme: Theme,
 ) {
-  const lightY = Math.max(8, doorTopY - 40)
-
-  // Background gradient (top → mid → top mirror)
-  const bgGrd = ctx.createLinearGradient(0, 0, 0, H)
-  bgGrd.addColorStop(0,   theme.c1)
-  bgGrd.addColorStop(0.5, theme.c2)
-  bgGrd.addColorStop(1,   theme.c1)
-  ctx.fillStyle = bgGrd
-  ctx.fillRect(0, 0, W, H)
-
-  // Ceiling glow dots
-  for (let i = 0; i < 4; i++) {
-    const lx  = W * (i + 0.5) / 4
-    const grd = ctx.createRadialGradient(lx, lightY, 0, lx, lightY, 40)
-    grd.addColorStop(0,   hexToRgba(theme.glow, 0.25))
-    grd.addColorStop(0.5, hexToRgba(theme.glow, 0.07))
-    grd.addColorStop(1,   hexToRgba(theme.glow, 0))
-    ctx.beginPath()
-    ctx.arc(lx, lightY, 40, 0, Math.PI * 2)
-    ctx.fillStyle = grd
-    ctx.fill()
-
-    ctx.beginPath()
-    ctx.arc(lx, lightY, 2.5, 0, Math.PI * 2)
-    ctx.fillStyle = theme.glow
-    ctx.fill()
-  }
+  ctx.clearRect(0, 0, W, H)
 }
 
 // ── Door renderer ─────────────────────────────────────────────────────────────
@@ -923,6 +949,7 @@ function renderDoor(
   door: Door,
   theme: Theme,
   isFavorite: boolean,
+  hasUnread: boolean,
 ) {
   const x = cx - DOOR_W / 2
   const w = DOOR_W
@@ -966,11 +993,11 @@ function renderDoor(
 
   // Door frame
   ctx.setLineDash([])
-  ctx.fillStyle = door.doorAccentColor
+  ctx.fillStyle = hexToCanvasColor(door.doorAccentColor, 0.75)
   ctx.fillRect(x - 6, topY - 6, w + 12, h + 12)
 
   // Door body
-  ctx.fillStyle = door.doorColor
+  ctx.fillStyle = hexToCanvasColor(door.doorColor, 0.75)
   ctx.fillRect(x, topY, w, h)
 
   // Wood grain
@@ -1045,6 +1072,20 @@ function renderDoor(
   ctx.textBaseline = 'middle'
   ctx.fillStyle = isFavorite ? '#fbbf24' : 'rgba(255,255,255,0.55)'
   ctx.fillText(isFavorite ? '★' : '☆', cx + DOOR_W / 2 - 14, topY + 14)
+
+  // 通知スター（左上）
+  if (hasUnread) {
+    ctx.shadowColor = 'rgba(0,0,0,0.4)'
+    ctx.shadowBlur = 2
+    ctx.shadowOffsetY = 1
+    ctx.font = '16px system-ui, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillText('⭐', cx - DOOR_W / 2 - 8, topY - 8)
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetY = 0
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

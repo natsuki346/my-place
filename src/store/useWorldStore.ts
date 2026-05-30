@@ -22,6 +22,8 @@ type WorldStore = {
   removePost: (id: string) => void
   selectedAvatarId: number | null
   setSelectedAvatarId: (id: number | null) => void
+  subPageOpen: boolean
+  setSubPageOpen: (open: boolean) => void
 }
 
 export const useWorldStore = create<WorldStore>((set) => ({
@@ -36,4 +38,6 @@ export const useWorldStore = create<WorldStore>((set) => ({
   removePost: (id) => set((s) => ({ posts: s.posts.filter((p) => p.id !== id) })),
   selectedAvatarId: null,
   setSelectedAvatarId: (id) => set({ selectedAvatarId: id }),
+  subPageOpen: false,
+  setSubPageOpen: (open) => set({ subPageOpen: open }),
 }))

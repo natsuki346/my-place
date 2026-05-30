@@ -23,9 +23,9 @@ type Theme = {
 }
 
 const MAP_THEME: Record<Period, Theme> = {
-  morning:   { dot: '#0ea5e9', bg: '#eff6ff', text: '#1e40af', sub: '#6b7280', card: 'rgba(255,255,255,0.75)', dimText: '#9ca3af', border: '#e5e7eb', tabActive: '#0284c7', tabBorder: '#0ea5e9', tabInactive: '#9ca3af' },
-  afternoon: { dot: '#3b82f6', bg: '#dbeafe', text: '#1d4ed8', sub: '#6b7280', card: 'rgba(255,255,255,0.75)', dimText: '#9ca3af', border: '#e5e7eb', tabActive: '#2563eb', tabBorder: '#3b82f6', tabInactive: '#9ca3af' },
-  evening:   { dot: '#f97316', bg: '#fff7ed', text: '#c2410c', sub: '#9ca3af', card: 'rgba(255,255,255,0.75)', dimText: '#d1d5db', border: '#e5e7eb', tabActive: '#ea580c', tabBorder: '#f97316', tabInactive: '#9ca3af' },
+  morning:   { dot: '#0ea5e9', bg: '#eff6ff', text: '#1e40af', sub: '#6b7280', card: 'rgba(255,255,255,0.75)', dimText: '#9ca3af', border: '#f3f4f6', tabActive: '#0284c7', tabBorder: '#0ea5e9', tabInactive: '#9ca3af' },
+  afternoon: { dot: '#3b82f6', bg: '#dbeafe', text: '#1d4ed8', sub: '#6b7280', card: 'rgba(255,255,255,0.75)', dimText: '#9ca3af', border: '#f3f4f6', tabActive: '#2563eb', tabBorder: '#3b82f6', tabInactive: '#9ca3af' },
+  evening:   { dot: '#f97316', bg: '#fff7ed', text: '#c2410c', sub: '#9ca3af', card: 'rgba(255,255,255,0.75)', dimText: '#d1d5db', border: '#f3f4f6', tabActive: '#ea580c', tabBorder: '#f97316', tabInactive: '#9ca3af' },
   night:     { dot: '#818cf8', bg: '#0f0a2e', text: '#c7d2fe', sub: '#94a3b8', card: 'rgba(255,255,255,0.06)', dimText: '#4b5563', border: '#1a1530', tabActive: '#a78bfa', tabBorder: '#7f77dd', tabInactive: '#444'    },
 }
 
@@ -101,7 +101,7 @@ export function ExploreView({ onEnterRoom }: Props) {
   const [activeTab,   setActiveTab]   = useState<InitTab>('recommend')
   const [searchTab,   setSearchTab]   = useState<SearchTab>('tags')
 
-  const { followingTags } = useTagStore()
+  const { followingTags, isFollowing } = useTagStore()
 
   useEffect(() => {
     setPeriod(getPeriod(new Date().getHours()))
@@ -159,7 +159,7 @@ export function ExploreView({ onEnterRoom }: Props) {
           style={{ background: 'rgba(0,0,0,0.07)', borderRadius: '24px', padding: '10px 16px' }}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-            stroke={t.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            stroke={t.text} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input
@@ -336,6 +336,7 @@ export function ExploreView({ onEnterRoom }: Props) {
       isOpen={selectedTag !== null}
       onClose={() => setSelectedTag(null)}
       onEnterRoom={onEnterRoom}
+      isFollowed={isFollowing(selectedTag ?? '')}
     />
     </>
   )
@@ -352,11 +353,11 @@ function TagRow({ tag, count, t, onClick }: {
   return (
     <button
       onClick={onClick}
-      className="border-0 border-b"
       style={{
         display: 'flex', alignItems: 'center', width: '100%',
         padding: '14px 16px', background: 'none',
-        borderBottomColor: t.border, cursor: 'pointer', textAlign: 'left',
+        borderBottom: `1px solid ${t.border}`,
+        cursor: 'pointer', textAlign: 'left',
       }}
     >
       <span style={{ flex: 1, fontSize: '15px', fontWeight: 500, color: t.text }}>

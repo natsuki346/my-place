@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { createAvatar } from '@dicebear/core'
 import { adventurer } from '@dicebear/collection'
 import { useTagStore } from '@/store/useTagStore'
@@ -151,6 +152,16 @@ type ViewingUser = {
   color: string
 } | null
 
+type CatchupItem = {
+  id: string
+  roomName: string
+  sender: string
+  senderColor: string
+  text: string
+  time: string
+  context?: { sender: string; senderColor: string; text: string; time: string }[]
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ROOM_META: Record<string, RoomMeta> = {
@@ -269,12 +280,58 @@ const ALL_PARTICIPANT_TAGS  = ['#充電中','#読書','#内向型','#ひとり�
 const MY_TAGS          = ['#充電中', '#読書', '#夜型', '#内向型', '#音楽好き']
 const MY_IDENTITY_TAGS = ['#夜型', '#音楽好き', '#猫派', '#インドア']
 
-const REACTION_EMOJIS = ['😂', '🥲', '👀', '🤝', '🌙', '✨'] as const
+const ALL_EMOJIS: string[] = [
+  '😀','😂','🥹','😊','😇','🥰','😍','🤩','😘','😎','🥳','😤','😢','😭','😱','😴','🤔','😶','🫠','🥲',
+  '👍','👎','👏','🙌','🤝','🫶','❤️','🔥','✨','💫','🎉','🎊','💯','🙏','👋','✌️','🤞','🫡','💪','🫂',
+  '🌙','⭐','🌟','☀️','🌈','🌸','🍀','🐱','🐶','🦋','🌊','❄️','🍃','🌿','🪴',
+  '☕','🍵','🧋','🍺','🍜','🍣','🍰','🎂','🍩','🍪',
+  '📚','🎵','🎮','💻','📱','💡','🔑','🎯','🧩','💤','🛌','🏠','✏️','📝','💬',
+]
 
 const MOCK_COMMENTS: CommentItem[] = [
   { id: '1', user: 'kaze', color: '#818cf8', text: 'わかりすぎる', time: '今' },
   { id: '2', user: 'suki', color: '#f472b6', text: '毎日そう思ってる', time: '1分前' },
 ]
+
+const MOCK_CATCHUP_ITEMS: CatchupItem[] = [
+  {
+    id: 'c1',
+    roomName: '充電中',
+    sender: 'tsuki',
+    senderColor: '#a78bfa',
+    text: 'ひとりの時間って本当に大事だよね。充電できた気がする',
+    time: '3分前',
+    context: [
+      { sender: 'luna', senderColor: '#fb923c', text: '最近人と会いすぎてちょっと疲れた',          time: '15分前' },
+      { sender: 'nox',  senderColor: '#6ee7b7', text: 'わかる。一人でいる時間がないとしんどい',   time: '10分前' },
+    ],
+  },
+  {
+    id: 'c2',
+    roomName: '充電中',
+    sender: 'luna',
+    senderColor: '#fb923c',
+    text: '今日はカフェで一人作業してきた。最高だった',
+    time: '8分前',
+    context: [
+      { sender: 'tsuki', senderColor: '#a78bfa', text: 'ひとりの時間って本当に大事だよね', time: '3分前' },
+    ],
+  },
+  {
+    id: 'c3',
+    roomName: '充電中',
+    sender: 'nox',
+    senderColor: '#6ee7b7',
+    text: '静かな場所で過ごすだけで回復する気がする',
+    time: '20分前',
+    context: [
+      { sender: 'luna',  senderColor: '#fb923c', text: '今日はカフェで一人作業してきた。最高だった', time: '8分前'  },
+      { sender: 'tsuki', senderColor: '#a78bfa', text: 'わかる、雑音がないだけで全然違う',           time: '12分前' },
+    ],
+  },
+]
+
+const CATCHUP_ROOMS = new Set(['内向型'])
 
 // ── ChatRoom ──────────────────────────────────────────────────────────────────
 
@@ -313,6 +370,7 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
   // ── Identity: timeline state ─────────────────────────────────────
   const [timelinePosts, setTimelinePosts]     = useState<TimelinePost[]>(TIMELINE_POSTS[roomKey] ?? [])
   const [timelineFilter, setTimelineFilter]   = useState<'all' | 'friend'>('all')
+  const [timelineSub, setTimelineSub]         = useState<string>('all')
   const [selectedPost, setSelectedPost]       = useState<TimelinePost | null>(null)
   const [commentMap, setCommentMap]           = useState<Record<string, CommentItem[]>>({})
   const [commentInput, setCommentInput]       = useState('')
@@ -325,6 +383,10 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
 
   // ── Participants sub-page state ──────────────────────────────────
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false)
+  const [isExitConfirmOpen, setIsExitConfirmOpen]   = useState(false)
+
+  // ── Catchup state ────────────────────────────────────────────────
+  const [catchupOpen, setCatchupOpen] = useState(false)
 
   // ── Chat state ───────────────────────────────────────────────────
   const [tab, setTab]           = useState<ChatTab>(hasTabs ? 'timeline' : 'chat')
@@ -425,9 +487,16 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
   // ── Identity: subroom list view ──────────────────────────────────
   if (isIdentity && activeSubRoom === null) {
     const postTagOptions = subRooms.filter(s => s.id !== 'all').map(s => s.tag)
-    const filteredPosts  = timelineFilter === 'all'
-      ? timelinePosts
-      : timelinePosts.filter(p => p.isFriend)
+    const parseTime = (s: string) => {
+      const n = parseInt(s)
+      return s.includes('時間') ? n * 60 : n
+    }
+    const subroomPosts = timelineSub === 'all'
+      ? [...timelinePosts].sort((a, b) => parseTime(a.time) - parseTime(b.time))
+      : timelinePosts.filter(p => p.tag === subRooms.find(s => s.id === timelineSub)?.tag)
+    const filteredPosts = timelineFilter === 'all'
+      ? subroomPosts
+      : subroomPosts.filter(p => p.isFriend)
 
     return (
       <div
@@ -442,34 +511,14 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
           <button onClick={onBack} style={{ color: t.accent, fontSize: '20px', lineHeight: 1, paddingRight: '4px' }}>←</button>
           <p className="flex-1 min-w-0 text-center" style={{ color: t.text, fontSize: '14px', fontWeight: 600 }}>{meta.label}</p>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {forceLocked ? (
-              following ? (
-                <button onClick={() => unfollowTag(tagName)}
-                  style={{ fontSize: '11px', color: t.dimText, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '3px 10px', background: 'none', cursor: 'pointer' }}>
-                  フォロー中
-                </button>
-              ) : (
-                <button onClick={() => followTag(tagName)}
-                  style={{ fontSize: '11px', color: '#fff', border: 'none', borderRadius: '12px', padding: '3px 10px', background: t.accent, cursor: 'pointer' }}>
-                  フォローして参加
-                </button>
-              )
-            ) : (
-              following && (
-                <button onClick={() => unfollowTag(tagName)}
-                  style={{ fontSize: '11px', color: t.dimText, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '3px 10px', background: 'none', cursor: 'pointer' }}>
-                  フォロー中
-                </button>
-              )
-            )}
             <button
               onClick={() => setIsParticipantsOpen(true)}
-              className="flex items-center gap-1.5"
-              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-            >
-              <span style={{ color: meta.dot, fontSize: '10px', animation: 'blink 1.4s ease-in-out infinite' }}>●</span>
-              <span style={{ color: t.subText, fontSize: '11px', textDecoration: 'underline', textDecorationColor: `${t.subText}55` }}>{meta.members}人がいる</span>
-            </button>
+              style={{ fontSize: '11px', color: t.subText, borderRadius: '12px', padding: '3px 10px', background: 'none', cursor: 'pointer', borderTop: `1px solid ${t.border}`, borderBottom: `1px solid ${t.border}`, borderLeft: `1px solid ${t.border}`, borderRight: `1px solid ${t.border}` }}
+            >参加者</button>
+            <button
+              onClick={() => setIsExitConfirmOpen(true)}
+              style={{ fontSize: '18px', color: t.subText, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+            >×</button>
           </div>
         </header>
 
@@ -497,6 +546,32 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
         <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
           {(forceLocked || activeListTab === 'rooms') ? (
             <>
+              {/* Catch up card（常に表示） */}
+              {!forceLocked && (() => {
+                const count  = CATCHUP_ROOMS.has(internalTagName) ? MOCK_CATCHUP_ITEMS.length : 0
+                const isDone = count === 0
+                return (
+                  <div
+                    onClick={() => !isDone && setCatchupOpen(true)}
+                    style={{ margin: '12px 16px', borderRadius: '16px', padding: '14px 16px', background: isDone ? (t.isNight ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)') : (t.isNight ? 'rgba(167,139,250,0.12)' : 'rgba(59,130,246,0.10)'), border: `1.5px solid ${isDone ? (t.isNight ? 'rgba(255,255,255,0.08)' : t.border) : (t.isNight ? 'rgba(167,139,250,0.5)' : t.accent + '55')}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: isDone ? 'default' : 'pointer', flexShrink: 0 }}
+                  >
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: '12px', background: isDone ? (t.isNight ? 'rgba(255,255,255,0.06)' : '#e5e7eb') : (t.isNight ? 'rgba(167,139,250,0.25)' : t.accent + '22'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                        {isDone ? '✅' : '⚡'}
+                      </div>
+                      {!isDone && (
+                        <div style={{ position: 'absolute', top: -5, right: -5, minWidth: 18, height: 18, borderRadius: '9px', background: '#ef4444', color: '#fff', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{count}</div>
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ color: t.text, fontSize: '14px', fontWeight: 700, marginBottom: '2px' }}>Catch up</p>
+                      <p style={{ color: t.subText, fontSize: '12px' }}>{isDone ? 'すべて読みました' : `充電中 に ${count} 件の未読`}</p>
+                    </div>
+                    {!isDone && <span style={{ color: t.accent, fontSize: '20px', flexShrink: 0 }}>›</span>}
+                  </div>
+                )
+              })()}
+
               {/* Sub-rooms */}
               {subRooms.map(sub =>
                 sub.id === 'all' ? (
@@ -626,7 +701,7 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
           <>
             <div onClick={() => { setSelectedPost(null); setCommentInput('') }}
               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200 }} />
-            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '390px', height: '60dvh', background: t.headerBg, borderTop: `2px solid ${t.border}`, borderRadius: '16px 16px 0 0', zIndex: 201, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '390px', height: '60dvh', background: t.headerBg, borderTop: `2px solid ${t.border}`, borderRadius: '20px 20px 0 0', zIndex: 201, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
                 <div style={{ width: '32px', height: '3px', background: t.border, borderRadius: '2px' }} />
               </div>
@@ -677,6 +752,41 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
 
         {/* Profile sub-page overlay */}
         <UserProfileSubPage user={viewingUser} onClose={() => setViewingUser(null)} t={t} />
+
+        {/* Catchup modal */}
+        {catchupOpen && createPortal(
+          <CatchupModal items={MOCK_CATCHUP_ITEMS} t={t} onClose={() => setCatchupOpen(false)} />,
+          document.body
+        )}
+
+        {/* Exit confirm modal */}
+        {isExitConfirmOpen && (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 10000,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              left: '50%', transform: 'translateX(-50%)',
+              width: '100%', maxWidth: '390px',
+            }}
+          >
+            <div style={{
+              background: t.headerBg, borderRadius: '16px',
+              padding: '28px 24px', width: '80%', textAlign: 'center',
+              display: 'flex', flexDirection: 'column', gap: '16px',
+            }}>
+              <p style={{ color: t.text, fontSize: '16px', fontWeight: 700 }}>ルームを退出しますか？</p>
+              <button
+                onClick={() => { setIsExitConfirmOpen(false); onBack(); }}
+                style={{ width: '100%', padding: '12px', borderRadius: '24px', background: t.accent, color: '#fff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+              >ルームを退出する</button>
+              <button
+                onClick={() => setIsExitConfirmOpen(false)}
+                style={{ background: 'none', border: 'none', color: t.subText, fontSize: '14px', cursor: 'pointer', padding: '4px' }}
+              >やっぱりしない</button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -771,6 +881,164 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
   )
 }
 
+// ── Catchup modal ─────────────────────────────────────────────────────────────
+
+function CatchupModal({ items, t, onClose }: {
+  items: CatchupItem[]
+  t: { isNight: boolean; text: string; subText: string; accent: string; border: string }
+  onClose: () => void
+}) {
+  const [index, setIndex]         = useState(0)
+  const [replyText, setReplyText] = useState('')
+  const isDone    = index >= items.length
+  const current   = items[index] ?? null
+  const remaining = items.length - index
+
+  const goNext = () => { setReplyText(''); setIndex(i => i + 1) }
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, bottom: 0,
+      left: '50%', transform: 'translateX(-50%)',
+      width: '100%', maxWidth: '390px',
+      zIndex: 10100,
+      background: t.isNight ? '#0d0a1a' : '#e8e8e8',
+      display: 'flex', flexDirection: 'column',
+      overflow: 'hidden',
+    }}>
+
+      {/* ヘッダー */}
+      <div style={{
+        height: 52, flexShrink: 0,
+        display: 'flex', alignItems: 'center', padding: '0 16px',
+        background: t.isNight ? '#1a1530' : '#ffffff',
+        borderBottom: `1px solid ${t.border}`,
+      }}>
+        <button onClick={onClose} style={{ color: t.accent, fontSize: '22px', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 12px 0 0' }}>‹</button>
+        <span style={{ flex: 1, textAlign: 'center', color: t.text, fontSize: '17px', fontWeight: 700 }}>
+          {isDone ? 'Caught up!' : `${remaining} Left`}
+        </span>
+        <div style={{ width: 40 }} />
+      </div>
+
+      {/* メインコンテンツ */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '5% 5% 0' }}>
+        {isDone ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '40px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '64px', lineHeight: 1 }}>🎉</div>
+            <p style={{ color: t.text, fontSize: '22px', fontWeight: 800, letterSpacing: '-0.3px' }}>You're all caught up!</p>
+            <p style={{ color: t.subText, fontSize: '14px', lineHeight: 1.6 }}>すべてのメッセージを確認しました</p>
+            <button onClick={onClose} style={{ marginTop: '8px', padding: '14px 40px', borderRadius: '28px', background: t.accent, color: '#fff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: `0 4px 16px ${t.accent}55` }}>ルームに戻る</button>
+          </div>
+        ) : (
+          <div style={{
+            flex: 1,
+            background: t.isNight ? '#1e1a2e' : '#ffffff',
+            borderRadius: '16px 16px 0 0',
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 -2px 16px rgba(0,0,0,0.15)',
+          }}>
+            {/* チャンネル名 + サブタイトル */}
+            <div style={{ padding: '14px 16px 10px', borderBottom: `1px solid ${t.border}`, flexShrink: 0 }}>
+              <p style={{ color: t.text, fontSize: '15px', fontWeight: 700 }}>#{current.roomName}</p>
+              <p style={{ color: t.accent, fontSize: '12px', marginTop: '2px' }}>New messages</p>
+            </div>
+
+            {/* メッセージスクロールエリア */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+              {/* コンテキスト（過去メッセージ） */}
+              {current.context?.map((msg, i) => (
+                <div key={i} style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '8px', background: msg.senderColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                    {msg.sender[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'baseline', marginBottom: '3px' }}>
+                      <span style={{ color: t.text, fontSize: '13px', fontWeight: 700 }}>{msg.sender}</span>
+                      <span style={{ color: t.subText, fontSize: '11px' }}>{msg.time}</span>
+                    </div>
+                    <p style={{ color: t.isNight ? 'rgba(232,224,255,0.6)' : '#6b7280', fontSize: '14px', lineHeight: 1.55 }}>{msg.text}</p>
+                  </div>
+                </div>
+              ))}
+
+              {/* NEW ライン */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0 14px' }}>
+                <div style={{ flex: 1, height: 1, background: '#ef4444' }} />
+                <span style={{ color: '#ef4444', fontSize: '11px', fontWeight: 700 }}>NEW</span>
+              </div>
+
+              {/* メインメッセージ（未読） */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '8px' }}>
+                <div style={{ width: 36, height: 36, borderRadius: '8px', background: current.senderColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                  {current.sender[0].toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'baseline', marginBottom: '3px' }}>
+                    <span style={{ color: t.text, fontSize: '13px', fontWeight: 700 }}>{current.sender}</span>
+                    <span style={{ color: t.subText, fontSize: '11px' }}>{current.time}</span>
+                  </div>
+                  <p style={{ color: t.isNight ? '#e8e0ff' : '#111827', fontSize: '14px', lineHeight: 1.55 }}>{current.text}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 返信入力欄 */}
+            <div style={{
+              flexShrink: 0,
+              padding: '10px 12px',
+              borderTop: `1px solid ${t.border}`,
+              display: 'flex', alignItems: 'center', gap: '8px',
+              background: t.isNight ? '#1e1a2e' : '#ffffff',
+            }}>
+              <span style={{ color: t.subText, fontSize: '18px', cursor: 'pointer' }}>＋</span>
+              <input
+                type="text"
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                placeholder={`#${current.roomName} に返信する`}
+                style={{
+                  flex: 1, padding: '8px 12px',
+                  borderRadius: '20px',
+                  border: `1px solid ${t.border}`,
+                  background: t.isNight ? 'rgba(255,255,255,0.06)' : '#f9fafb',
+                  color: t.text, fontSize: '14px',
+                  outline: 'none',
+                }}
+              />
+              {replyText.length > 0 && (
+                <button
+                  onClick={() => setReplyText('')}
+                  style={{ width: 32, height: 32, borderRadius: '50%', background: t.accent, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '14px', flexShrink: 0 }}
+                >↑</button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 下部ボタン */}
+      {!isDone && (
+        <div style={{
+          flexShrink: 0, display: 'flex',
+          background: t.isNight ? '#1e1a2e' : '#ffffff',
+          borderTop: `1px solid ${t.border}`,
+        }}>
+          <button
+            onClick={goNext}
+            style={{ flex: 1, padding: '16px', background: 'transparent', color: t.text, fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+          >Keep Unread</button>
+          <button
+            onClick={goNext}
+            style={{ flex: 2, padding: '16px', background: '#1a7f4b', color: '#ffffff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+          >Mark as Read</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Timeline post card ────────────────────────────────────────────────────────
 
 type PostCardProps = {
@@ -784,16 +1052,18 @@ type PostCardProps = {
 function PostCard({ post, commentCount, onComment, onAvatarTap, t }: PostCardProps) {
   const [myReactions,  setMyReactions]  = useState<Set<string>>(new Set())
   const [allReactions, setAllReactions] = useState<string[]>([])
-  const [showPicker,   setShowPicker]   = useState(false)
+  const [showPicker,        setShowPicker]        = useState(false)
+  const [pickerTab,         setPickerTab]         = useState<'myemoji' | 'all'>('myemoji')
+  const [myEmojis,          setMyEmojis]          = useState<string[]>(['❤️', '👍', '🔥', '😭', '😊'])
+  const [isEditingMyEmoji,  setIsEditingMyEmoji]  = useState(false)
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    // Seed deterministic initial reactions from "others" based on post id
     const code  = post.id.charCodeAt(0)
-    const count = code % 3
+    const count = code % 4
     const seeds: string[] = []
     for (let i = 0; i < count; i++) {
-      seeds.push(REACTION_EMOJIS[(code + i * 2) % REACTION_EMOJIS.length])
+      seeds.push(ALL_EMOJIS[(code + i * 2) % ALL_EMOJIS.length])
     }
     setAllReactions(seeds)
   }, [post.id])
@@ -824,7 +1094,7 @@ function PostCard({ post, commentCount, onComment, onAvatarTap, t }: PostCardPro
             {post.user[0]}
           </div>
         </button>
-        <span style={{ color: t.subText, fontSize: '12px' }}>{post.user}</span>
+        <span style={{ color: t.subText, fontSize: '12px', fontWeight: 500 }}>{post.user}</span>
         <span style={{ background: t.tagBg, color: t.tagText, fontSize: '10px', padding: '2px 8px', borderRadius: '10px', border: `1px solid ${t.tagBorder}`, flexShrink: 0 }}>{post.tag}</span>
         <span style={{ color: t.dimText, fontSize: '10px', marginLeft: 'auto', flexShrink: 0 }}>{post.time}</span>
       </div>
@@ -877,27 +1147,119 @@ function PostCard({ post, commentCount, onComment, onAvatarTap, t }: PostCardPro
       {/* Emoji picker */}
       {showPicker && (
         <div style={{
-          display: 'flex', gap: '6px', justifyContent: 'center',
-          marginTop: '8px', padding: '8px 12px', borderRadius: '16px',
+          marginTop: '8px', padding: '10px', borderRadius: '16px',
           background: t.isNight ? 'rgba(30,21,67,0.95)' : 'rgba(243,244,246,0.97)',
-          border: `1px solid ${t.border}`,
+          borderTop: `1px solid ${t.border}`, borderBottom: `1px solid ${t.border}`,
+          borderLeft: `1px solid ${t.border}`, borderRight: `1px solid ${t.border}`,
         }}>
-          {REACTION_EMOJIS.map(emoji => (
-            <button
-              key={emoji}
-              onClick={() => toggleReaction(emoji)}
-              style={{
-                fontSize: '20px', lineHeight: 1, padding: '4px 6px', borderRadius: '8px', cursor: 'pointer',
-                background: myReactions.has(emoji)
-                  ? (t.isNight ? 'rgba(167,139,250,0.25)' : 'rgba(0,0,0,0.08)')
-                  : 'none',
-                border: 'none',
-              }}
-            >
-              {emoji}
-            </button>
-          ))}
+          {/* タブ */}
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+            {(['myemoji', 'all'] as const).map(tb => (
+              <button
+                key={tb}
+                onClick={() => setPickerTab(tb)}
+                style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '10px', cursor: 'pointer',
+                  background: pickerTab === tb ? t.accent : 'none',
+                  color: pickerTab === tb ? '#fff' : t.subText,
+                  border: 'none' }}
+              >{tb === 'myemoji' ? 'My Emoji' : 'All'}</button>
+            ))}
+          </div>
+
+          {pickerTab === 'myemoji' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {myEmojis.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => toggleReaction(emoji)}
+                  style={{ fontSize: '20px', lineHeight: 1, padding: '4px 6px', borderRadius: '8px', cursor: 'pointer',
+                    background: myReactions.has(emoji) ? (t.isNight ? 'rgba(167,139,250,0.25)' : 'rgba(0,0,0,0.08)') : 'none',
+                    border: 'none' }}
+                >{emoji}</button>
+              ))}
+              <button
+                onClick={() => setIsEditingMyEmoji(true)}
+                style={{ fontSize: '14px', lineHeight: 1, padding: '4px 6px', borderRadius: '8px', cursor: 'pointer',
+                  background: 'none', border: 'none', color: t.subText }}
+              >🖊️</button>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', maxHeight: '240px', overflowY: 'auto' }}>
+              {ALL_EMOJIS.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => toggleReaction(emoji)}
+                  style={{ fontSize: '20px', lineHeight: 1, padding: '4px', borderRadius: '8px', cursor: 'pointer',
+                    background: myReactions.has(emoji) ? (t.isNight ? 'rgba(167,139,250,0.25)' : 'rgba(0,0,0,0.08)') : 'none',
+                    border: 'none' }}
+                >{emoji}</button>
+              ))}
+            </div>
+          )}
         </div>
+      )}
+
+      {/* My Emoji 編集モーダル */}
+      {isEditingMyEmoji && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10001,
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          left: '50%', transform: 'translateX(-50%)',
+          width: '100%', maxWidth: '390px',
+        }}>
+          <div style={{
+            width: '100%', background: t.isNight ? '#1e1535' : '#ffffff',
+            borderRadius: '20px 20px 0 0', padding: '20px 16px 32px',
+            maxHeight: '80dvh', display: 'flex', flexDirection: 'column', gap: '12px',
+          }}>
+            <p style={{ color: t.text, fontSize: '15px', fontWeight: 700, textAlign: 'center' }}>My Emoji を編集</p>
+
+            <div>
+              <p style={{ fontSize: '11px', color: t.subText, marginBottom: '6px' }}>現在（最大5個）</p>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {myEmojis.map(emoji => (
+                  <div key={emoji} style={{ position: 'relative' }}>
+                    <span style={{ fontSize: '24px' }}>{emoji}</span>
+                    <button
+                      onClick={() => setMyEmojis(prev => prev.filter(e => e !== emoji))}
+                      style={{ position: 'absolute', top: -4, right: -4, width: '14px', height: '14px', borderRadius: '50%',
+                        background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 700,
+                        border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        lineHeight: 1 }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <p style={{ fontSize: '11px', color: t.subText, marginBottom: '6px' }}>追加する</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '2px' }}>
+                {ALL_EMOJIS.map(emoji => (
+                  <button
+                    key={emoji}
+                    onClick={() => {
+                      if (myEmojis.includes(emoji) || myEmojis.length >= 5) return
+                      setMyEmojis(prev => [...prev, emoji])
+                    }}
+                    style={{ fontSize: '22px', lineHeight: 1, padding: '5px', borderRadius: '8px', cursor: 'pointer',
+                      background: myEmojis.includes(emoji) ? (t.isNight ? 'rgba(167,139,250,0.25)' : 'rgba(0,0,0,0.08)') : 'none',
+                      border: 'none',
+                      opacity: myEmojis.length >= 5 && !myEmojis.includes(emoji) ? 0.3 : 1 }}
+                  >{emoji}</button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsEditingMyEmoji(false)}
+              style={{ width: '100%', padding: '12px', borderRadius: '24px', background: t.accent, color: '#fff',
+                fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+            >保存</button>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )
@@ -920,7 +1282,7 @@ function FriendTimelineCard({ msg, dot, t, onAvatarTap }: { msg: Message; dot: s
   const isMe = msg.sender === 'me'
 
   return (
-    <div style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: '12px', padding: '12px 14px' }}>
+    <div style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}`, borderRadius: '16px', padding: '12px 14px' }}>
       <div className="flex items-center gap-2 mb-2">
         <button onClick={() => { if (!isMe) onAvatarTap(msg.sender) }} style={{ background: 'none', border: 'none', padding: 0, cursor: isMe ? 'default' : 'pointer' }}>
           <Avatar label={isMe ? 'me' : msg.sender.charAt(0).toUpperCase()} color={isMe ? t.accent : (msg.color ?? dot)} />

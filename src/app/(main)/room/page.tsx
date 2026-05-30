@@ -9,7 +9,7 @@ import { MuseumView } from '@/components/museum/MuseumView'
 import { BottomNav } from '@/components/nav/BottomNav'
 
 export default function RoomPage() {
-  const { currentView, setView } = useWorldStore()
+  const { currentView, setView, subPageOpen } = useWorldStore()
   const [activeRoom, setActiveRoom] = useState<string | null>(null)
 
   const handleViewChange = (v: typeof currentView) => {
@@ -42,7 +42,7 @@ export default function RoomPage() {
       </div>
 
       {/* ── Bottom navigation ────────────────────────────────────── */}
-      {!showingChatRoom && (
+      {!showingChatRoom && !subPageOpen && (
         <BottomNav current={currentView} onChange={handleViewChange} />
       )}
 

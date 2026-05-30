@@ -1,227 +1,86 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
-type Period = 'night' | 'morning' | 'afternoon' | 'evening'
+type ToD = 'morning' | 'day' | 'evening' | 'night'
 
-type Star = { x: number; y: number; size: number; dur: number; del: number }
+const getToD = (h: number): ToD =>
+  h >= 5 && h < 10 ? 'morning' : h >= 10 && h < 15 ? 'day' : h >= 15 && h < 18 ? 'evening' : 'night'
 
-function getPeriod(hour: number): Period {
-  if (hour >= 18 || hour < 5)  return 'night'
-  if (hour < 11)               return 'morning'
-  if (hour < 15)               return 'afternoon'
-  return 'evening'
+const TIME_BG: Record<ToD, string> = {
+  morning: 'linear-gradient(185deg,#3A8CC0 0%,#70B8DA 16%,#F8CE70 42%,#FFC090 62%,#FFE4CC 82%,#FFF8F0 100%)',
+  day:     'linear-gradient(180deg,#0C5A9C 0%,#2880BC 22%,#4CAAD8 48%,#94CDE8 72%,#D4ECFA 90%,#EEF8FF 100%)',
+  evening: 'linear-gradient(185deg,#040114 0%,#180448 12%,#560878 28%,#B0165A 50%,#E43018 68%,#F87028 84%,#FFAE40 100%)',
+  night:   'linear-gradient(190deg,#010108 0%,#030318 28%,#070540 58%,#040320 80%,#010108 100%)',
 }
 
-function pr(seed: number): number {
-  const x = Math.sin(seed + 1) * 10000
-  return x - Math.floor(x)
-}
+type StarItem   = { id: number; left: number; top: number; size: number; op: number; dur: number; delay: number }
+type NebulaItem = { id: number; left: number; top: number; size: number; color: string }
+type CloudItem  = { id: number; left: number; top: number; w: number; h: number }
 
-function generateStars(): Star[] {
-  return Array.from({ length: 26 }, (_, i) => ({
-    x:    pr(i * 3)     * 94 + 3,
-    y:    pr(i * 3 + 1) * 52 + 2,
-    size: pr(i * 3 + 2) * 1.8 + 0.7,
-    dur:  pr(i * 7)     * 2.5 + 1.5,
-    del:  pr(i * 11)    * 4.5,
-  }))
-}
+export function SkyLayer({ hour }: { hour?: number }) {
+  const [tod, setTod] = useState<ToD>('night')
 
-const AF_CLOUDS = [
-  { left: 8,  top: 9,  scale: 0.95, dur: 22, del: 0   },
-  { left: 44, top: 5,  scale: 1.15, dur: 30, del: -8  },
-  { left: 72, top: 13, scale: 0.75, dur: 18, del: -14 },
-]
-
-const EV_CLOUDS = [
-  { left: 5,  top: 15 },
-  { left: 38, top: 8  },
-  { left: 65, top: 18 },
-  { left: 82, top: 11 },
-]
-
-const GRADIENTS: Record<Period, string> = {
-  night:     'linear-gradient(to bottom, #06000f 0%, #0d0a2e 55%, #1a0e3a 100%)',
-  morning:   'linear-gradient(to bottom, #e0f4ff 0%, #b8e0f7 50%, #87ceeb 100%)',
-  afternoon: 'linear-gradient(to bottom, #5ab8f0 0%, #87ceeb 55%, #b0ddf5 100%)',
-  evening:   'linear-gradient(to bottom, #ffd080 0%, #ff8c3a 35%, #e85030 62%, #b03060 82%, #2d1b69 100%)',
-}
-
-function Cloud({ dark = false, color }: { dark?: boolean; color?: string }) {
-  const base = color ?? (dark ? 'rgba(20,10,5,0.85)' : 'white')
-  return (
-    <div style={{ position: 'relative', width: '90px', height: '40px' }}>
-      <div style={{ position: 'absolute', bottom: 0, left: '8%', width: '84%', height: '22px', borderRadius: '11px', background: base }} />
-      <div style={{ position: 'absolute', bottom: '13px', left: '18%', width: '38px', height: '34px', borderRadius: '50%', background: base }} />
-      <div style={{ position: 'absolute', bottom: '15px', left: '40%', width: '46px', height: '40px', borderRadius: '50%', background: base }} />
-    </div>
-  )
-}
-
-export function SkyLayer({ hour }: { hour: number }) {
-  const period = getPeriod(hour)
-  const [stars, setStars] = useState<Star[]>([])
+  const [micro,  setMicro]  = useState<StarItem[]>([])
+  const [normal, setNormal] = useState<StarItem[]>([])
+  const [bright, setBright] = useState<StarItem[]>([])
+  const [nebula, setNebula] = useState<NebulaItem[]>([])
+  const [clouds, setClouds] = useState<CloudItem[]>([])
 
   useEffect(() => {
-    setStars(generateStars())
+    const update = () => setTod(getToD(hour ?? new Date().getHours()))
+    update()
+    if (hour === undefined) {
+      const id = setInterval(update, 60_000)
+      return () => clearInterval(id)
+    }
+  }, [hour])
+
+  useEffect(() => {
+    setMicro(Array.from({ length: 90 }, (_, i) => ({ id: i,     left: (Math.sin(i*7.391)*0.5+0.5)*100, top: (Math.sin(i*3.714+1.2)*0.5+0.5)*90, size: 0.5+(i%3)*0.18,  op: 0.10+(i%8)*0.05,  dur: 4+(i%7)*0.7,   delay: (i%17)*0.31 })))
+    setNormal(Array.from({ length: 50 }, (_, i) => ({ id: 100+i, left: (Math.sin(i*5.123+0.5)*0.5+0.5)*100, top: (Math.sin(i*2.841+2.8)*0.5+0.5)*88, size: 1+(i%4)*0.32,   op: 0.32+(i%6)*0.09, dur: 2.8+(i%9)*0.42, delay: (i%11)*0.42 })))
+    setBright(Array.from({ length: 18 }, (_, i) => ({ id: 155+i, left: (Math.sin(i*9.432+1.8)*0.5+0.5)*100, top: (Math.sin(i*4.567+0.3)*0.5+0.5)*80, size: 1.9+(i%4)*0.38, op: 0.6+(i%4)*0.08,  dur: 2.2+(i%8)*0.35, delay: (i%13)*0.52 })))
+    setNebula(Array.from({ length: 6  }, (_, i) => ({ id: i, left: (Math.sin(i*4.123+0.7)*0.5+0.5)*100, top: (Math.sin(i*2.987+1.4)*0.5+0.5)*85, size: 90+(i%4)*62, color: ['rgba(70,30,160,0.055)','rgba(30,18,110,0.045)','rgba(90,50,190,0.06)','rgba(18,25,100,0.05)','rgba(50,18,130,0.045)','rgba(70,50,190,0.065)'][i] })))
+    setClouds(Array.from({ length: 7  }, (_, i) => ({ id: i, left: (Math.sin(i*6.28+0.4)*0.5+0.5)*100, top: 20+(Math.sin(i*3.14+1.1)*0.5+0.5)*55, w: 100+(i%4)*55, h: 26+(i%3)*12 })))
   }, [])
 
   return (
     <>
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, background: TIME_BG[tod], transition: 'background 1s ease' }} />
+
+        {tod === 'morning' && <>
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 80% 55% at 50% 90%,rgba(255,200,100,0.30) 0%,transparent 70%)' }} />
+          {clouds.map(c => <div key={c.id} style={{ position: 'absolute', left: `${c.left}%`, top: `${c.top}%`, width: c.w, height: c.h, borderRadius: '50%', background: 'rgba(255,250,240,0.26)', filter: 'blur(18px)' }} />)}
+        </>}
+
+        {tod === 'day' && <>
+          <div style={{ position: 'absolute', inset: '0 0 60% 0', background: 'linear-gradient(180deg,rgba(20,80,160,0.32) 0%,transparent 100%)' }} />
+          {clouds.map(c => <div key={c.id} style={{ position: 'absolute', left: `${c.left}%`, top: `${c.top}%`, width: c.w, height: c.h, borderRadius: '50%', background: 'rgba(255,255,255,0.20)', filter: 'blur(22px)' }} />)}
+        </>}
+
+        {tod === 'evening' && <>
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 90% 60% at 50% 85%,rgba(240,90,30,0.36) 0%,transparent 65%)' }} />
+          <div style={{ position: 'absolute', inset: '0 0 75% 0', background: 'linear-gradient(180deg,rgba(60,10,120,0.32) 0%,transparent 100%)' }} />
+        </>}
+
+        {tod === 'night' && <>
+          {nebula.map(nb => <div key={nb.id} style={{ position: 'absolute', left: `${nb.left}%`, top: `${nb.top}%`, width: nb.size, height: nb.size, borderRadius: '50%', background: nb.color, filter: 'blur(38px)', transform: 'translate(-50%,-50%)' }} />)}
+          <div style={{ position: 'absolute', inset: '60% 0 0 0', background: 'linear-gradient(transparent,rgba(1,1,8,0.55))' }} />
+          {clouds.map(c => <div key={c.id} style={{ position: 'absolute', left: `${c.left}%`, top: `${c.top}%`, width: c.w, height: c.h, borderRadius: '50%', background: 'rgba(20,10,60,0.18)', filter: 'blur(28px)' }} />)}
+          {micro.map(s  => <div key={s.id}  style={{ position: 'absolute', left: `${s.left}%`, top: `${s.top}%`, width: s.size, height: s.size, borderRadius: '50%', background: '#fff', ['--star-op' as string]: s.op, animation: `starTwinkle ${s.dur}s ${s.delay}s ease-in-out infinite` }} />)}
+          {normal.map(s => <div key={s.id}  style={{ position: 'absolute', left: `${s.left}%`, top: `${s.top}%`, width: s.size, height: s.size, borderRadius: '50%', background: '#fff', boxShadow: `0 0 ${s.size*1.5}px rgba(255,255,255,${(s.op*0.6).toFixed(2)})`, ['--star-op' as string]: s.op, animation: `starTwinkle ${s.dur}s ${s.delay}s ease-in-out infinite` }} />)}
+          {bright.map(s => <div key={s.id}  style={{ position: 'absolute', left: `${s.left}%`, top: `${s.top}%`, width: s.size, height: s.size, borderRadius: '50%', background: '#fff', boxShadow: `0 0 ${s.size*2.5}px rgba(255,255,255,${(s.op*0.8).toFixed(2)}),0 0 ${s.size*5}px rgba(200,220,255,${(s.op*0.3).toFixed(2)})`, ['--star-op' as string]: s.op, animation: `starTwinkle ${s.dur}s ${s.delay}s ease-in-out infinite` }} />)}
+        </>}
+      </div>
+
       <style>{`
-        @keyframes twinkle {
-          0%, 100% { opacity: 0.25; transform: scale(1); }
-          50%       { opacity: 1;    transform: scale(1.4); }
-        }
-        @keyframes cloud-drift {
-          0%, 100% { transform: translateX(-18px); }
-          50%      { transform: translateX(18px);  }
+        @keyframes starTwinkle {
+          0%, 100% { opacity: var(--star-op, 0.8); transform: scale(1); }
+          40%      { opacity: 0.04; transform: scale(0.4); }
+          70%      { opacity: var(--star-op, 0.8); transform: scale(1.1); }
         }
       `}</style>
-
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: 0,
-          overflow: 'hidden',
-          background: GRADIENTS[period],
-        }}
-      >
-        {/* ── Night ──────────────────────────────────────────────────── */}
-        {period === 'night' && (
-          <>
-            {stars.map((s, i) => (
-              <div
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: `${s.x}%`,
-                  top:  `${s.y}%`,
-                  width:  `${s.size}px`,
-                  height: `${s.size}px`,
-                  borderRadius: '50%',
-                  background: 'white',
-                  animation: `twinkle ${s.dur}s ${s.del}s infinite ease-in-out`,
-                }}
-              />
-            ))}
-
-            {/* Crescent moon */}
-            <div style={{ position: 'absolute', right: '13%', top: '9%' }}>
-              <div
-                style={{
-                  width: '42px', height: '42px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle at 38% 38%, #fdf6e0, #e8d8b8)',
-                  boxShadow: '0 0 22px 4px rgba(240,220,160,0.4)',
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '-4px', right: '-10px',
-                    width: '40px', height: '50px',
-                    borderRadius: '50%',
-                    background: '#0d0a2e',
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Blue-purple night overlay */}
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(25,15,55,0.28)' }} />
-          </>
-        )}
-
-        {/* ── Morning ────────────────────────────────────────────────── */}
-        {period === 'morning' && (
-          <>
-            {/* Pale yellow sun — small, upper left */}
-            <div
-              style={{
-                position: 'absolute',
-                left: '12%', top: '14%',
-                width: '38px', height: '38px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, #ffffff, #ffe566, #ffd633)',
-                boxShadow: '0 0 18px 6px rgba(255,230,100,0.45), 0 0 50px 18px rgba(200,230,255,0.20)',
-              }}
-            />
-            {/* Soft light-blue morning haze */}
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(180,220,255,0.10)' }} />
-          </>
-        )}
-
-        {/* ── Afternoon ──────────────────────────────────────────────── */}
-        {period === 'afternoon' && (
-          <>
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%', top: '6%',
-                transform: 'translateX(-50%)',
-                width: '58px', height: '58px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, #fffcaa, #ffe83a, #ffc000)',
-                boxShadow: '0 0 40px 14px rgba(255,230,40,0.65), 0 0 100px 36px rgba(255,200,0,0.22)',
-              }}
-            />
-            {AF_CLOUDS.map((c, i) => (
-              <div
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: `${c.left}%`,
-                  top:  `${c.top}%`,
-                  transform: `scale(${c.scale})`,
-                  transformOrigin: 'left top',
-                  opacity: 0.88,
-                  animation: `cloud-drift ${c.dur}s ${c.del}s ease-in-out infinite`,
-                }}
-              >
-                <Cloud />
-              </div>
-            ))}
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(100,170,230,0.08)' }} />
-          </>
-        )}
-
-        {/* ── Evening ────────────────────────────────────────────────── */}
-        {period === 'evening' && (
-          <>
-            <div
-              style={{
-                position: 'absolute',
-                right: '15%', top: '20%',
-                width: '50px', height: '50px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, #fff0b0, #ffcc44, #ff8c00)',
-                boxShadow: '0 0 32px 12px rgba(255,180,40,0.55), 0 0 80px 30px rgba(255,130,0,0.22)',
-              }}
-            />
-            {EV_CLOUDS.map((c, i) => (
-              <div
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: `${c.left}%`,
-                  top:  `${c.top}%`,
-                  opacity: 0.85,
-                  transform: 'scale(1.3)',
-                  transformOrigin: 'left top',
-                }}
-              >
-                <Cloud color={i % 2 === 0 ? 'rgba(254,215,170,0.72)' : 'rgba(254,205,211,0.60)'} />
-              </div>
-            ))}
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(90,20,130,0.07)' }} />
-          </>
-        )}
-      </div>
     </>
   )
 }
