@@ -1,9 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, memo } from 'react'
-import { createAvatar } from '@dicebear/core'
-import { adventurer } from '@dicebear/collection'
-import type { Options } from '@dicebear/adventurer'
 import { SkyLayer } from '@/components/room/SkyLayer'
 import { DoorHall } from '@/components/world/DoorHall'
 import { useWorldStore } from '@/store/useWorldStore'
@@ -14,8 +11,7 @@ import type { Gender } from '@/store/useProfileStore'
 
 type Period    = 'morning' | 'afternoon' | 'evening' | 'night'
 type MuseumTab = 'museum' | 'profile'
-type Pose      = 'stand' | 'arms' | 'onehand' | 'sit'
-type EditorTab    = 'skin' | 'hair-style' | 'hair-color' | 'top' | 'eye' | 'mouth' | 'accessory' | 'pose' | 'fashion'
+type Pose = string
 type DecorSubPage = 'wallpaper' | 'theme' | 'notif' | 'emoji' | 'zukan'
 type DecoTheme    = { text: string; subText: string; headerBg: string; border: string; bg: string }
 
@@ -31,6 +27,7 @@ type AvatarConfig = {
   mouth:               string
   glassesProbability:  number   // 0 or 100
   earringsProbability: number   // 0 or 100
+  rpmUrl?:             string   // AI-generated avatar image URL
 }
 
 type Item = {
@@ -45,7 +42,7 @@ type Item = {
   pose?:    Pose
 }
 
-type CanvasData     = { id: number; items: Item[] }
+type CanvasData     = { id: number; items: Item[]; title?: string }
 type DragState      = { id: string; ox: number; oy: number; startX: number; startY: number }
 type PinchState     = { itemId: string; dist0: number; angle0: number; size0: number; rotation0: number }
 type SheetSelection = { kind: 'tag' | 'emoji'; content: string }
@@ -60,160 +57,50 @@ function getPeriod(h: number): Period {
 }
 
 // Inject width="100%" so the embedded SVG fills its wrapper div
-function createAvatarSvg(config: AvatarConfig): string {
-  return createAvatar(adventurer, {
-    seed:                config.seed,
-    skinColor:           [config.skinColor],
-    hairColor:           [config.hairColor],
-    hair:                [config.hair]     as Options['hair'],
-    eyes:                [config.eyes]     as Options['eyes'],
-    eyebrows:            [config.eyebrows] as Options['eyebrows'],
-    mouth:               [config.mouth]    as Options['mouth'],
-    glassesProbability:  config.glassesProbability,
-    earringsProbability: config.earringsProbability,
-    backgroundColor:     ['transparent'],
-  })
-    .toString()
-    .replace('<svg ', '<svg width="100%" ')
+const PERIOD_TAG_COLORS: Record<Period, { bg: string; text: string; border: string }> = {
+  morning:   { bg: 'rgba(14,165,233,0.18)',  text: '#38bdf8', border: 'rgba(14,165,233,0.35)'  },
+  afternoon: { bg: 'rgba(37,99,235,0.18)',   text: '#60a5fa', border: 'rgba(37,99,235,0.35)'   },
+  evening:   { bg: 'rgba(234,88,12,0.18)',   text: '#fb923c', border: 'rgba(234,88,12,0.35)'   },
+  night:     { bg: 'rgba(167,139,250,0.18)', text: '#a78bfa', border: 'rgba(167,139,250,0.35)' },
 }
 
-type ClothingStyle = {
-  top: string; bottom: string; shoes: string; outer: string | null
-  topColor: string; bottomColor: string; shoesColor: string; outerColor: string
-}
-
-// Body SVG elements (viewBox 0 0 120 220, face occupies y=0–75)
-function renderBody(pose: Pose, config: AvatarConfig, clothing?: ClothingStyle) {
-  const skin       = `#${config.skinColor}`
-  const top        = clothing?.topColor    ?? config.topColor
-  const bot        = clothing?.bottomColor ?? config.bottomColor
-  const shoeCol    = clothing?.shoesColor  ?? '#2a2a2a'
-  const topStyle   = clothing?.top         ?? 'tshirt'
-  const outerStyle = clothing?.outer       ?? null
-  const outerColor = clothing?.outerColor  ?? '#374151'
-
-  const neck   = <rect key="neck"   x="52" y="68" width="16" height="16" rx="5" fill={skin} />
-  const body   = <path key="body"   d="M38,84 Q38,82 42,82 L78,82 Q82,82 82,84 L80,130 Q80,134 76,134 L44,134 Q40,134 40,130 Z" fill={top} />
-  const collar = <path key="collar" d="M48,84 Q60,80 72,84" stroke="rgba(0,0,0,0.13)" strokeWidth="1.5" fill="none" />
-  const waist  = <line key="waist"  x1="40" y1="134" x2="80" y2="134" stroke="rgba(0,0,0,0.18)" strokeWidth="1" />
-
-  const isLong  = topStyle === 'longsleeve' || topStyle === 'hoodie'
-  const armFill = isLong ? top : skin
-
-  const leftArmStand  = <path key="al" d="M38,85 Q30,88 26,105 Q24,118 26,128 Q28,132 32,130 Q34,120 36,108 Q38,96 40,88 Z" fill={armFill} />
-  const rightArmStand = <path key="ar" d="M82,85 Q90,88 94,105 Q96,118 94,128 Q92,132 88,130 Q86,120 84,108 Q82,96 80,88 Z" fill={armFill} />
-  const leftArmArms   = <path key="al" d="M38,88 Q28,82 16,78 Q10,76 10,80 Q12,84 18,86 Q28,90 38,94 Z" fill={skin} />
-  const rightArmArms  = <path key="ar" d="M82,88 Q92,82 104,78 Q110,76 110,80 Q108,84 102,86 Q92,90 82,94 Z" fill={skin} />
-  const rightArmOne   = <path key="ar" d="M82,85 Q88,75 92,60 Q94,52 90,50 Q86,50 84,58 Q80,72 80,88 Z" fill={skin} />
-
-  const legL  = <path key="ll" d="M44,134 L44,138 Q42,160 41,178 Q40,184 44,185 Q50,186 52,184 Q54,182 53,178 Q52,160 52,138 L52,134 Z" fill={bot} />
-  const legR  = <path key="lr" d="M68,134 L68,138 Q68,160 67,178 Q66,182 68,184 Q72,186 78,185 Q82,184 79,178 Q78,160 76,138 L76,134 Z" fill={bot} />
-  const shoeL = <ellipse key="sl" cx="47" cy="185" rx="10" ry="5" fill={shoeCol} />
-  const shoeR = <ellipse key="sr" cx="73" cy="185" rx="10" ry="5" fill={shoeCol} />
-
-  // Tshirt sleeve caps (shoulder-only overlay on skin arms)
-  const sleeveCaps = topStyle === 'tshirt' ? <>
-    <path key="alc" d="M38,85 Q30,88 28,102 Q38,106 40,90 Z" fill={top} />
-    <path key="arc" d="M82,85 Q90,88 92,102 Q82,106 80,90 Z" fill={top} />
-  </> : null
-
-  // Hood overlay for hoodie
-  const hood = topStyle === 'hoodie'
-    ? <path key="hood" d="M44,84 Q42,74 60,68 Q78,74 76,84 Q68,78 60,76 Q52,78 44,84 Z" fill={top} opacity="0.85" />
-    : null
-
-  // Outer layer (jacket/blazer/coat/denim/parka on top of inner top)
-  const outerBody = outerStyle ? (
-    outerStyle === 'coat'
-      ? <path key="ob" d="M38,84 Q38,82 42,82 L78,82 Q82,82 82,84 L80,158 Q80,162 76,162 L44,162 Q40,162 40,158 Z" fill={outerColor} />
-      : <path key="ob" d="M38,84 Q38,82 42,82 L78,82 Q82,82 82,84 L80,130 Q80,134 76,134 L44,134 Q40,134 40,130 Z" fill={outerColor} />
-  ) : null
-  const outerLeftArm = outerStyle
-    ? <path key="oal" d="M38,85 Q30,88 26,105 Q24,118 26,128 Q28,132 32,130 Q34,120 36,108 Q38,96 40,88 Z" fill={outerColor} />
-    : null
-  const outerRightArm = outerStyle
-    ? <path key="oar" d="M82,85 Q90,88 94,105 Q96,118 94,128 Q92,132 88,130 Q86,120 84,108 Q82,96 80,88 Z" fill={outerColor} />
-    : null
-  const outerLapels = (outerStyle === 'jacket' || outerStyle === 'blazer')
-    ? <path key="olap" d="M52,84 L50,104 L60,94 L70,104 L68,84" stroke="white" strokeWidth="1.5" fill="none" opacity="0.35" />
-    : null
-  const outerHood = outerStyle === 'parka'
-    ? <path key="ohood" d="M44,84 Q42,74 60,68 Q78,74 76,84 Q68,78 60,76 Q52,78 44,84 Z" fill={outerColor} opacity="0.9" />
-    : null
-  const outerDenim = outerStyle === 'denim'
-    ? <>
-        <line key="odl" x1="44" y1="84" x2="44" y2="134" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-        <line key="odr" x1="76" y1="84" x2="76" y2="134" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-      </>
-    : null
-  const outerLayer = outerStyle ? <>{outerBody}{outerLeftArm}{outerRightArm}{outerLapels}{outerHood}{outerDenim}</> : null
-
-  if (pose === 'sit') {
-    return (
-      <>
-        <path key="lap"  d="M44,134 L44,138 Q44,148 55,150 Q66,152 72,148 L76,134 Z" fill={bot} />
-        <path key="leg"  d="M52,150 Q52,160 51,172 Q50,178 54,179 Q58,180 60,178 Q62,174 62,160 L62,150 Z" fill={bot} />
-        <ellipse key="sh" cx="56" cy="179" rx="9" ry="5" fill={shoeCol} />
-        {hood}
-        {body}{collar}{waist}
-        {leftArmStand}{rightArmStand}
-        {sleeveCaps}
-        {outerLayer}
-        <ellipse key="hl" cx="29" cy="131" rx="5" ry="4" fill={skin} />
-        <ellipse key="hr" cx="91" cy="131" rx="5" ry="4" fill={skin} />
-        {neck}
-      </>
-    )
-  }
-
-  if (pose === 'arms') {
-    return (
-      <>
-        {legL}{legR}{shoeL}{shoeR}
-        {hood}
-        {body}{collar}{waist}
-        {leftArmArms}{rightArmArms}
-        {outerBody}{outerLapels}{outerHood}{outerDenim}
-        <ellipse key="hl" cx="12" cy="80" rx="5" ry="4" fill={skin} />
-        <ellipse key="hr" cx="108" cy="80" rx="5" ry="4" fill={skin} />
-        {neck}
-      </>
-    )
-  }
-
-  if (pose === 'onehand') {
-    return (
-      <>
-        {legL}{legR}{shoeL}{shoeR}
-        {hood}
-        {body}{collar}{waist}
-        {leftArmStand}{rightArmOne}
-        {sleeveCaps}
-        {outerLayer}
-        <line key="swl" x1="26" y1="128" x2="32" y2="130" stroke="rgba(0,0,0,0.18)" strokeWidth="1.5" />
-        <ellipse key="hl" cx="29" cy="131" rx="5" ry="4" fill={skin} />
-        <ellipse key="hr" cx="91" cy="52"  rx="5" ry="4" fill={skin} />
-        {neck}
-      </>
-    )
-  }
-
-  // stand (default)
-  return (
-    <>
-      {legL}{legR}{shoeL}{shoeR}
-      {hood}
-      {body}{collar}{waist}
-      {leftArmStand}{rightArmStand}
-      {sleeveCaps}
-      {outerLayer}
-      <line key="swl" x1="26" y1="128" x2="32" y2="130" stroke="rgba(0,0,0,0.18)" strokeWidth="1.5" />
-      <line key="swr" x1="88" y1="128" x2="94" y2="130" stroke="rgba(0,0,0,0.18)" strokeWidth="1.5" />
-      <ellipse key="hl" cx="29" cy="131" rx="5" ry="4" fill={skin} />
-      <ellipse key="hr" cx="91" cy="131" rx="5" ry="4" fill={skin} />
-      {neck}
-    </>
-  )
+const TAB_THEME: Record<Period, {
+  activeBg: string; activeText: string;
+  inactiveBg: string; inactiveText: string;
+  border: string; containerBg: string;
+}> = {
+  morning: {
+    activeBg:     'rgba(255,255,255,0.92)',
+    activeText:   '#0369a1',
+    inactiveBg:   'rgba(255,255,255,0.18)',
+    inactiveText: 'rgba(255,255,255,0.72)',
+    border:       'rgba(255,255,255,0.22)',
+    containerBg:  'rgba(14,165,233,0.22)',
+  },
+  afternoon: {
+    activeBg:     'rgba(255,255,255,0.92)',
+    activeText:   '#1d4ed8',
+    inactiveBg:   'rgba(255,255,255,0.18)',
+    inactiveText: 'rgba(255,255,255,0.72)',
+    border:       'rgba(255,255,255,0.22)',
+    containerBg:  'rgba(37,99,235,0.22)',
+  },
+  evening: {
+    activeBg:     'rgba(255,255,255,0.92)',
+    activeText:   '#c2410c',
+    inactiveBg:   'rgba(255,255,255,0.18)',
+    inactiveText: 'rgba(255,255,255,0.72)',
+    border:       'rgba(255,255,255,0.22)',
+    containerBg:  'rgba(234,88,12,0.22)',
+  },
+  night: {
+    activeBg:     'rgba(167,139,250,0.92)',
+    activeText:   '#1e1b4b',
+    inactiveBg:   'rgba(255,255,255,0.10)',
+    inactiveText: 'rgba(255,255,255,0.55)',
+    border:       'rgba(167,139,250,0.25)',
+    containerBg:  'rgba(109,40,217,0.22)',
+  },
 }
 
 const TAB_ACTIVE_COLOR: Record<Period, string> = {
@@ -255,37 +142,34 @@ const IDENTITY_TAGS  = ['#夜型', '#音楽好き', '#猫派', '#インドア', 
 const EMOJI_STAMPS   = ['🎵', '⭐', '🌙', '🎨', '🌸', '💫', '🎮', '📚', '🎭', '🌈', '🔥', '💎', '🎪', '🌊', '🦋', '🎸']
 
 const TOP_STYLES = [
-  { val: 'tshirt',     label: 'Tシャツ',      svg: <svg viewBox="0 0 60 50" width="48" height="40"><path d="M10,5 L0,20 L12,20 L12,45 L48,45 L48,20 L60,20 L50,5 L38,10 Q30,15 22,10 Z" fill="currentColor"/></svg> },
-  { val: 'tanktop',    label: 'タンクトップ',  svg: <svg viewBox="0 0 60 50" width="48" height="40"><path d="M18,5 L15,45 L45,45 L42,5 Q30,12 18,5 Z" fill="currentColor"/></svg> },
-  { val: 'longsleeve', label: '長袖',          svg: <svg viewBox="0 0 80 55" width="48" height="40"><path d="M15,5 L0,30 L15,32 L18,45 L62,45 L65,32 L80,30 L65,5 L50,12 Q40,17 30,12 Z" fill="currentColor"/></svg> },
-  { val: 'hoodie',     label: 'パーカー',      svg: <svg viewBox="0 0 80 60" width="48" height="40"><path d="M15,5 L0,32 L15,34 L18,50 L62,50 L65,34 L80,32 L65,5 L50,14 Q40,22 30,14 Z" fill="currentColor"/><rect x="27" y="5" width="26" height="14" rx="6" fill="currentColor" opacity="0.5"/></svg> },
+  { val: 'tshirt',     label: 'Tシャツ',      svg: <svg viewBox="0 0 60 50" width="48" height="40" fill="none"><path d="M10,8 L2,18 L10,20 L10,44 L50,44 L50,20 L58,18 L50,8 L38,14 C36,16 24,16 22,14 Z" fill="currentColor" opacity="0.7" /><path d="M22,14 Q30,20 38,14" stroke="rgba(255,255,255,0.3)" strokeWidth="1" fill="none" /></svg> },
+  { val: 'tanktop',    label: 'タンクトップ',  svg: <svg viewBox="0 0 60 50" width="48" height="40" fill="none"><path d="M18,6 L14,12 L14,44 L46,44 L46,12 L42,6 C40,4 38,3 36,4 L34,8 C32,12 28,12 26,8 L24,4 C22,3 20,4 18,6 Z" fill="currentColor" opacity="0.7" /></svg> },
+  { val: 'longsleeve', label: '長袖',          svg: <svg viewBox="0 0 60 50" width="48" height="40" fill="none"><path d="M14,8 L2,28 L10,32 L16,18 L16,44 L44,44 L44,18 L50,32 L58,28 L46,8 L38,14 C36,16 24,16 22,14 Z" fill="currentColor" opacity="0.7" /></svg> },
+  { val: 'hoodie',     label: 'パーカー',      svg: <svg viewBox="0 0 60 50" width="48" height="40" fill="none"><path d="M14,8 L2,28 L10,32 L16,18 L16,44 L44,44 L44,18 L50,32 L58,28 L46,8 L38,14 Q36,6 30,4 Q24,6 22,14 Z" fill="currentColor" opacity="0.7" /><path d="M26,14 Q30,18 34,14 L34,28 L26,28 Z" fill="rgba(255,255,255,0.12)" /></svg> },
+  { val: 'shirt',      label: 'シャツ',        svg: <svg viewBox="0 0 60 50" width="48" height="40" fill="none"><path d="M14,8 L2,18 L10,20 L10,44 L50,44 L50,20 L58,18 L50,8 L42,12 L38,6 L30,10 L22,6 L18,12 Z" fill="currentColor" opacity="0.7" /><path d="M26,10 L30,14 L34,10" stroke="rgba(255,255,255,0.3)" strokeWidth="1" fill="none" /><circle cx="30" cy="22" r="1.5" fill="rgba(255,255,255,0.3)" /><circle cx="30" cy="30" r="1.5" fill="rgba(255,255,255,0.3)" /></svg> },
 ]
 
 const BOTTOM_STYLES = [
-  { val: 'jeans',      label: 'ジーンズ',    svg: <svg viewBox="0 0 60 60" width="40" height="40"><path d="M5,0 L20,60 L30,40 L40,60 L55,0 Z" fill="currentColor"/><line x1="30" y1="0" x2="30" y2="40" stroke="white" strokeWidth="2" opacity="0.3"/></svg> },
-  { val: 'shorts',     label: 'ハーフパンツ', svg: <svg viewBox="0 0 60 40" width="40" height="40"><path d="M5,0 L18,40 L30,25 L42,40 L55,0 Z" fill="currentColor"/></svg> },
-  { val: 'sweatpants', label: 'スウェット',   svg: <svg viewBox="0 0 60 60" width="40" height="40"><path d="M5,0 L18,60 L30,42 L42,60 L55,0 Z" fill="currentColor"/><line x1="5" y1="8" x2="55" y2="8" stroke="white" strokeWidth="3" opacity="0.3"/></svg> },
-  { val: 'slacks',     label: 'スラックス',   svg: <svg viewBox="0 0 60 60" width="40" height="40"><path d="M8,0 L20,60 L30,44 L40,60 L52,0 Z" fill="currentColor"/></svg> },
-  { val: 'skirt',      label: 'スカート',     svg: <svg viewBox="0 0 70 55" width="40" height="40"><path d="M15,0 L0,55 L70,55 L55,0 Z" fill="currentColor"/></svg> },
-  { val: 'miniskirt',  label: 'ミニスカ',     svg: <svg viewBox="0 0 70 35" width="40" height="40"><path d="M15,0 L5,35 L65,35 L55,0 Z" fill="currentColor"/></svg> },
+  { val: 'jeans',      label: 'ジーンズ',    svg: <svg viewBox="0 0 60 54" width="48" height="44" fill="none"><path d="M10,4 L8,8 L8,32 Q8,36 14,38 L18,54 L28,54 L30,32 L32,54 L42,54 L46,38 Q52,36 52,32 L52,8 L50,4 Z" fill="currentColor" opacity="0.7" /><line x1="30" y1="8" x2="30" y2="36" stroke="rgba(0,0,0,0.2)" strokeWidth="1.2" /><line x1="14" y1="16" x2="22" y2="16" stroke="rgba(255,255,255,0.15)" strokeWidth="0.8" /></svg> },
+  { val: 'shorts',     label: 'ハーフパンツ', svg: <svg viewBox="0 0 60 38" width="48" height="30" fill="none"><path d="M10,4 L8,8 L8,22 Q8,26 16,28 L18,36 L28,36 L30,22 L32,36 L42,36 L44,28 Q52,26 52,22 L52,8 L50,4 Z" fill="currentColor" opacity="0.7" /><line x1="30" y1="8" x2="30" y2="24" stroke="rgba(0,0,0,0.2)" strokeWidth="1.2" /></svg> },
+  { val: 'sweatpants', label: 'スウェット',   svg: <svg viewBox="0 0 60 54" width="48" height="44" fill="none"><path d="M10,4 L8,8 L8,32 Q8,36 14,38 L18,52 L28,52 L30,32 L32,52 L42,52 L46,38 Q52,36 52,32 L52,8 L50,4 Z" fill="currentColor" opacity="0.7" /><line x1="22" y1="6" x2="38" y2="6" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" /><rect x="9" y="48" width="18" height="4" rx="2" fill="currentColor" opacity="0.5" /><rect x="33" y="48" width="18" height="4" rx="2" fill="currentColor" opacity="0.5" /></svg> },
+  { val: 'slacks',     label: 'スラックス',   svg: <svg viewBox="0 0 60 54" width="48" height="44" fill="none"><path d="M12,4 L10,8 L10,32 Q10,36 15,38 L18,54 L28,54 L30,32 L32,54 L42,54 L45,38 Q50,36 50,32 L50,8 L48,4 Z" fill="currentColor" opacity="0.7" /><line x1="30" y1="8" x2="30" y2="36" stroke="rgba(0,0,0,0.15)" strokeWidth="1" /><line x1="16" y1="10" x2="16" y2="52" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8" /><line x1="44" y1="10" x2="44" y2="52" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8" /></svg> },
+  { val: 'skirt',      label: 'スカート',     svg: <svg viewBox="0 0 60 50" width="48" height="40" fill="none"><path d="M18,4 L42,4 L42,10 L18,10 Z" fill="currentColor" opacity="0.9" /><path d="M14,10 L8,46 L52,46 L46,10 Z" fill="currentColor" opacity="0.7" /><line x1="24" y1="10" x2="20" y2="46" stroke="rgba(0,0,0,0.1)" strokeWidth="1" /><line x1="36" y1="10" x2="40" y2="46" stroke="rgba(0,0,0,0.1)" strokeWidth="1" /></svg> },
 ]
 
 const SHOES_STYLES = [
-  { val: 'sneakers', label: 'スニーカー', svg: <svg viewBox="0 0 70 35" width="48" height="30"><path d="M5,20 Q20,5 40,8 L65,10 L65,28 Q40,32 5,28 Z" fill="currentColor"/><rect x="5" y="24" width="60" height="6" rx="3" fill="currentColor" opacity="0.6"/></svg> },
-  { val: 'leather',  label: '革靴',       svg: <svg viewBox="0 0 70 35" width="48" height="30"><path d="M5,20 Q25,8 45,10 L65,12 L65,28 Q40,32 5,28 Z" fill="currentColor"/></svg> },
-  { val: 'sandals',  label: 'サンダル',   svg: <svg viewBox="0 0 70 30" width="48" height="30"><rect x="5" y="20" width="60" height="8" rx="4" fill="currentColor"/><line x1="15" y1="20" x2="20" y2="8" stroke="currentColor" strokeWidth="4"/><line x1="35" y1="20" x2="35" y2="5" stroke="currentColor" strokeWidth="4"/><line x1="55" y1="20" x2="50" y2="8" stroke="currentColor" strokeWidth="4"/></svg> },
-  { val: 'boots',    label: 'ブーツ',     svg: <svg viewBox="0 0 60 55" width="48" height="40"><rect x="15" y="0" width="20" height="35" rx="4" fill="currentColor"/><path d="M10,30 Q30,25 50,30 L50,50 Q30,55 10,50 Z" fill="currentColor"/></svg> },
-  { val: 'pumps',    label: 'パンプス',   svg: <svg viewBox="0 0 70 40" width="48" height="30"><path d="M5,30 Q30,10 60,25 L60,35 Q40,38 5,35 Z" fill="currentColor"/><line x1="50" y1="35" x2="54" y2="10" stroke="currentColor" strokeWidth="4"/></svg> },
-  { val: 'heels',    label: 'ハイヒール', svg: <svg viewBox="0 0 70 45" width="48" height="30"><path d="M5,35 Q30,15 60,28 L60,38 Q40,42 5,40 Z" fill="currentColor"/><line x1="52" y1="38" x2="58" y2="8" stroke="currentColor" strokeWidth="5"/></svg> },
-  { val: 'loafers',  label: 'ローファー', svg: <svg viewBox="0 0 70 35" width="48" height="30"><path d="M5,18 Q28,6 48,10 L65,14 L65,28 Q40,32 5,28 Z" fill="currentColor"/><path d="M20,10 Q30,5 40,10" stroke="white" strokeWidth="2" fill="none" opacity="0.5"/></svg> },
+  { val: 'sneakers', label: 'スニーカー', svg: <svg viewBox="0 0 60 30" width="56" height="26" fill="none"><path d="M4,18 C4,14 8,10 16,9 L30,8 L44,10 C52,12 56,16 56,20 C56,24 52,26 44,26 L16,26 C8,26 4,24 4,20 Z" fill="currentColor" opacity="0.8" /><path d="M6,18 C6,15 10,13 18,12 L32,11" stroke="rgba(255,255,255,0.25)" strokeWidth="1.2" fill="none" /><path d="M8,22 L52,22" stroke="rgba(0,0,0,0.2)" strokeWidth="1.5" /><path d="M12,10 L10,18" stroke="rgba(255,255,255,0.15)" strokeWidth="1" /><path d="M20,9 L18,18" stroke="rgba(255,255,255,0.15)" strokeWidth="1" /><path d="M28,8 L26,18" stroke="rgba(255,255,255,0.15)" strokeWidth="1" /></svg> },
+  { val: 'loafers',  label: 'ローファー', svg: <svg viewBox="0 0 60 28" width="56" height="24" fill="none"><path d="M4,16 C4,12 8,8 18,8 L40,8 C50,8 56,12 56,16 C56,20 50,24 40,24 L18,24 C8,24 4,20 4,16 Z" fill="currentColor" opacity="0.8" /><path d="M10,12 Q30,9 50,12" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2" fill="none" /><path d="M6,20 L54,20" stroke="rgba(0,0,0,0.25)" strokeWidth="1.5" /></svg> },
+  { val: 'sandals',  label: 'サンダル',   svg: <svg viewBox="0 0 60 28" width="56" height="24" fill="none"><path d="M8,20 C8,16 12,14 30,14 C48,14 52,16 52,20 C52,24 48,26 30,26 C12,26 8,24 8,20 Z" fill="currentColor" opacity="0.8" /><path d="M12,14 Q30,10 48,14" stroke="currentColor" strokeWidth="4" strokeLinecap="round" fill="none" opacity="0.7" /><path d="M16,10 Q30,6 44,10" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" fill="none" opacity="0.7" /></svg> },
+  { val: 'boots',    label: 'ブーツ',     svg: <svg viewBox="0 0 60 44" width="48" height="36" fill="none"><path d="M18,4 C16,4 14,6 14,10 L14,30 C10,30 6,32 6,36 C6,40 10,42 22,42 C34,42 38,40 38,36 C38,32 34,30 30,30 L30,10 C30,6 28,4 26,4 Z" fill="currentColor" opacity="0.8" /><line x1="16" y1="6" x2="16" y2="30" stroke="rgba(255,255,255,0.12)" strokeWidth="1" /><path d="M8,36 L36,36" stroke="rgba(0,0,0,0.2)" strokeWidth="1.5" /></svg> },
+  { val: 'heels',    label: 'ハイヒール', svg: <svg viewBox="0 0 60 36" width="56" height="30" fill="none"><path d="M8,16 C8,12 12,8 24,8 L42,8 C50,8 54,12 54,16 C54,20 50,22 42,22 L20,22 C16,22 14,24 14,26 C14,28 12,30 10,30 C8,30 6,28 6,24 L6,20 Z" fill="currentColor" opacity="0.8" /><line x1="8" y1="22" x2="54" y2="22" stroke="rgba(0,0,0,0.2)" strokeWidth="1.2" /><path d="M6,24 L6,30 C6,31 10,31 10,30" stroke="rgba(0,0,0,0.3)" strokeWidth="1.5" fill="none" /></svg> },
 ]
 const OUTER_STYLES: { val: string | null; label: string; svg?: React.ReactElement }[] = [
   { val: null,      label: 'なし' },
-  { val: 'jacket',  label: 'ジャケット',        svg: <svg viewBox="0 0 80 60" width="48" height="40"><path d="M15,5 L0,32 L15,34 L18,55 L62,55 L65,34 L80,32 L65,5 L50,15 L40,25 L30,15 Z" fill="currentColor"/><line x1="40" y1="25" x2="40" y2="55" stroke="white" strokeWidth="2" opacity="0.4"/></svg> },
-  { val: 'blazer',  label: 'ブレザー',          svg: <svg viewBox="0 0 80 60" width="48" height="40"><path d="M15,5 L0,32 L15,34 L18,55 L62,55 L65,34 L80,32 L65,5 L50,15 L40,28 L30,15 Z" fill="currentColor"/><path d="M30,15 L35,30 L40,28 L45,30 L50,15" fill="white" opacity="0.2"/></svg> },
-  { val: 'coat',    label: 'コート',            svg: <svg viewBox="0 0 80 80" width="48" height="40"><path d="M15,5 L0,35 L15,37 L16,75 L64,75 L65,37 L80,35 L65,5 L50,16 L40,28 L30,16 Z" fill="currentColor"/></svg> },
-  { val: 'denim',   label: 'デニムジャケット',  svg: <svg viewBox="0 0 80 60" width="48" height="40"><path d="M15,5 L0,32 L15,34 L18,55 L62,55 L65,34 L80,32 L65,5 L50,14 L40,22 L30,14 Z" fill="currentColor"/><line x1="40" y1="22" x2="40" y2="55" stroke="white" strokeWidth="1" opacity="0.3"/><line x1="18" y1="38" x2="62" y2="38" stroke="white" strokeWidth="1" opacity="0.25"/></svg> },
-  { val: 'parka',   label: 'マウンテンパーカー', svg: <svg viewBox="0 0 80 65" width="48" height="40"><path d="M15,10 L0,35 L15,37 L18,58 L62,58 L65,37 L80,35 L65,10 L50,20 Q40,30 30,20 Z" fill="currentColor"/><path d="M30,10 Q40,18 50,10 Q46,4 40,2 Q34,4 30,10 Z" fill="currentColor" opacity="0.7"/></svg> },
+  { val: 'jacket',  label: 'ジャケット',        svg: <svg viewBox="0 0 60 50" width="48" height="40" fill="none"><path d="M12,6 L2,18 L10,22 L10,44 L50,44 L50,22 L58,18 L48,6 L40,10 L36,8 L30,12 L24,8 L20,10 Z" fill="currentColor" opacity="0.7" /><path d="M30,12 L28,22 L30,20 L32,22 L30,12" fill="rgba(255,255,255,0.15)" /><line x1="30" y1="20" x2="30" y2="44" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" /></svg> },
+  { val: 'blazer',  label: 'ブレザー',          svg: <svg viewBox="0 0 60 50" width="48" height="40" fill="none"><path d="M12,6 L2,18 L10,22 L10,44 L50,44 L50,22 L58,18 L48,6 L40,10 L34,8 L30,14 L26,8 L20,10 Z" fill="currentColor" opacity="0.7" /><path d="M30,14 L26,20 L30,18 L34,20 L30,14" fill="rgba(255,255,255,0.18)" /><circle cx="29" cy="28" r="2" fill="rgba(255,255,255,0.25)" /><circle cx="29" cy="36" r="2" fill="rgba(255,255,255,0.25)" /><rect x="34" y="14" width="8" height="6" rx="0.5" fill="rgba(255,255,255,0.1)" /></svg> },
+  { val: 'coat',    label: 'コート',            svg: <svg viewBox="0 0 60 56" width="48" height="46" fill="none"><path d="M12,6 L2,18 L10,22 L10,52 L50,52 L50,22 L58,18 L48,6 L40,10 L34,8 L30,14 L26,8 L20,10 Z" fill="currentColor" opacity="0.7" /><path d="M30,14 L27,22 L30,20 L33,22 L30,14" fill="rgba(255,255,255,0.15)" /><circle cx="29" cy="28" r="2" fill="rgba(255,255,255,0.2)" /><circle cx="29" cy="36" r="2" fill="rgba(255,255,255,0.2)" /><circle cx="29" cy="44" r="2" fill="rgba(255,255,255,0.2)" /></svg> },
+  { val: 'denim',   label: 'デニムジャケット',  svg: <svg viewBox="0 0 60 50" width="48" height="40" fill="none"><path d="M12,6 L2,18 L10,22 L10,44 L50,44 L50,22 L58,18 L48,6 L40,10 L36,8 L30,12 L24,8 L20,10 Z" fill="currentColor" opacity="0.7" /><rect x="16" y="10" width="10" height="8" rx="0.5" fill="rgba(255,255,255,0.1)" stroke="rgba(255,220,100,0.4)" strokeWidth="0.7" /><rect x="34" y="10" width="10" height="8" rx="0.5" fill="rgba(255,255,255,0.1)" stroke="rgba(255,220,100,0.4)" strokeWidth="0.7" /><circle cx="30" cy="20" r="2" fill="rgba(255,255,255,0.25)" /><circle cx="30" cy="30" r="2" fill="rgba(255,255,255,0.25)" /></svg> },
 ]
 const PROFILE_TAGS   = ['#夜型', '#音楽好き', '#猫派', '#インドア']
 const INITIAL_TAGS   = ['#音楽', '#夜型', '#猫好き']
@@ -349,17 +233,6 @@ const CANVAS_FRAME: React.CSSProperties = {
   position: 'relative', overflow: 'hidden',
 }
 
-const EDITOR_TABS: { key: EditorTab; icon: string; label: string }[] = [
-  { key: 'skin',       icon: '🎨', label: '肌'         },
-  { key: 'hair-style', icon: '💇', label: '髪型'       },
-  { key: 'hair-color', icon: '🎨', label: '髪色'       },
-  { key: 'top',        icon: '👕', label: '服'         },
-  { key: 'eye',        icon: '👁️', label: '目'         },
-  { key: 'mouth',      icon: '👄', label: '口'         },
-  { key: 'accessory',  icon: '✨', label: 'アクセ'     },
-]
-
-// ── Main Component ─────────────────────────────────────────────────────────────
 
 export function MuseumView() {
   const [hour,           setHour]           = useState(0)
@@ -370,6 +243,8 @@ export function MuseumView() {
   const [activeCanvas,   setActiveCanvas]   = useState(0)
   const [isSheetOpen,    setIsSheetOpen]    = useState(false)
   const [editMenuOpen,   setEditMenuOpen]   = useState(false)
+  const [canvasEditMode, setCanvasEditMode] = useState<'menu' | 'tag-edit' | 'emoji-edit' | 'avatar-edit'>('menu')
+  const [itemEditSubMode, setItemEditSubMode] = useState<'move-tag' | 'move-emoji' | 'move-avatar' | 'change' | null>(null)
   const [isTitleEditOpen, setIsTitleEditOpen] = useState(false)
   const [isBgEditOpen,    setIsBgEditOpen]    = useState(false)
   const [canvasBg,        setCanvasBg]        = useState<string>('default')
@@ -393,28 +268,12 @@ export function MuseumView() {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
 
   const [avatarConfig,       setAvatarConfig]       = useState<AvatarConfig>(DEFAULT_AVATAR)
-  const [isAvatarEditorOpen, setIsAvatarEditorOpen] = useState(false)
-  const [canvasEditSubPanel, setCanvasEditSubPanel] = useState<'fashion' | 'pose' | null>(null)
-  const [editorTab,          setEditorTab]          = useState<EditorTab>('skin')
-  const [editingConfig,      setEditingConfig]      = useState<AvatarConfig>(DEFAULT_AVATAR)
-  const [clothingTop,        setClothingTop]        = useState('tshirt')
-  const [clothingBottom,     setClothingBottom]     = useState('jeans')
-  const [clothingShoes,      setClothingShoes]      = useState('sneakers')
-  const [clothingTopColor,   setClothingTopColor]   = useState('#8b5cf6')
-  const [clothingBottomColor, setClothingBottomColor] = useState('#1e3a5f')
-  const [clothingShoesColor, setClothingShoesColor] = useState('#ffffff')
-  const [clothingOuter,      setClothingOuter]      = useState<string | null>(null)
-  const [clothingOuterColor, setClothingOuterColor] = useState('#374151')
-  const [clothingSubTab,     setClothingSubTab]     = useState<'outer' | 'top' | 'bottom' | 'shoes'>('top')
-  const [savedOutfits,       setSavedOutfits]       = useState<{ id: number; name: string; top: string; topColor: string; bottom: string; bottomColor: string; shoes: string; shoesColor: string; outer: string | null }[]>([
-    { id: 1, name: 'デフォルト', top: 'tshirt',     topColor: '#8b5cf6', bottom: 'jeans',      bottomColor: '#1e3a5f', shoes: 'sneakers', shoesColor: '#ffffff', outer: null     },
-    { id: 2, name: 'カジュアル', top: 'hoodie',     topColor: '#374151', bottom: 'sweatpants', bottomColor: '#374151', shoes: 'sneakers', shoesColor: '#1a1a2e', outer: null     },
-    { id: 3, name: 'きれいめ',   top: 'longsleeve', topColor: '#1e3a5f', bottom: 'slacks',     bottomColor: '#1a1a2e', shoes: 'loafers',  shoesColor: '#92400e', outer: 'blazer' },
-  ])
-  const [selectedOutfitId,   setSelectedOutfitId]   = useState<number | null>(null)
-  const [editingOutfitId,    setEditingOutfitId]    = useState<number | null>(null)
-  const [editingOutfitName,  setEditingOutfitName]  = useState('')
-
+  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false)
+  const [generateError,      setGenerateError]      = useState<string | null>(null)
+  const [savedAvatars,       setSavedAvatars]       = useState<{ id: number; imageUrl: string }[]>([])
+  const [activeProfileTab,   setActiveProfileTab]   = useState<'avatar' | 'collection' | 'memories'>('avatar')
+  const [memoriesTab,        setMemoriesTab]        = useState<'museum' | 'chat'>('museum')
+  const [museumMemories,     setMuseumMemories]     = useState<{ id: number; date: string; snapshot: string }[]>([])
   const [displayName,           setDisplayName]           = useState('なつき')
   const [userId,                setUserId]                = useState('natsuki_346')
   const [bio,                   setBio]                   = useState('夜型の音楽好き🎵 猫と暮らしてます🐱')
@@ -434,6 +293,7 @@ export function MuseumView() {
   const [editBtnEmoji, setEditBtnEmoji] = useState('🎨')
   const [notifyStyle,  setNotifyStyle]  = useState<'star' | 'dot' | 'bell'>('star')
   const [decorSubPage, setDecorSubPage] = useState<DecorSubPage | null>(null)
+  const [decoTab, setDecoTab] = useState<'general' | 'custom'>('general')
 
   const { setView, setSubPageOpen } = useWorldStore()
   const { gender, setGender } = useProfileStore()
@@ -556,9 +416,14 @@ export function MuseumView() {
     if (pinchActive.current) return
     const el = (e.target as HTMLElement).closest('[data-item-id]') as HTMLElement | null
     if (!el) { setSelectedItemId(null); return }
-    e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId)
     const id = el.dataset.itemId!
     const item = (canvasesRef.current[ci]?.items ?? []).find(d => d.id === id); if (!item) return
+    const canInteract =
+      (itemEditSubMode === 'move-tag'    && item.kind === 'tag') ||
+      (itemEditSubMode === 'move-emoji'  && item.kind === 'emoji') ||
+      (itemEditSubMode === 'move-avatar' && item.kind === 'avatar')
+    if (!canInteract) return
+    e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId)
     const rect = canvasRefs.current[ci]!.getBoundingClientRect()
     dragState.current = {
       id,
@@ -623,19 +488,15 @@ export function MuseumView() {
     setSelectedItemId(id)
     setIsSheetOpen(false)
     setSheetSel(null)
+    setMuseumMemories(prev => [{
+      id: Date.now(),
+      date: new Date().toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      snapshot: `キャンバス「${canvases[activeCanvas]?.title ?? '無題'}」を更新しました`,
+    }, ...prev].slice(0, 50))
   }
 
   const closeSheet = () => { setIsSheetOpen(false); setSheetSel(null) }
 
-  const openAvatarEditor = () => {
-    setEditingConfig(avatarConfig)
-    setEditorTab('skin')
-    setIsAvatarEditorOpen(true)
-  }
-  const saveAvatarConfig = () => {
-    setAvatarConfig(editingConfig)
-    setIsAvatarEditorOpen(false)
-  }
 
   const openSubPage = (page: 'profile-edit' | 'tag-list' | 'connections') => {
     if (page === 'profile-edit') { setEditName(displayName); setEditId(userId); setEditBio(bio); setEditGender(gender) }
@@ -669,10 +530,10 @@ export function MuseumView() {
         alignItems: 'flex-end',
         paddingBottom: '8px',
         marginTop: '-20px',
-        background: dt.bg,
+        background: TAB_THEME[period].containerBg,
         borderBottomWidth: '1px',
         borderBottomStyle: 'solid',
-        borderBottomColor: dt.border,
+        borderBottomColor: TAB_THEME[period].border,
         borderRadius: 0,
         width: '100vw',
         marginLeft: 'calc(-50vw + 50%)',
@@ -698,10 +559,10 @@ export function MuseumView() {
                 cursor: 'pointer',
                 fontSize: '12px',
                 fontWeight: activeIndex === index ? 700 : 400,
-                background: activeIndex === index ? activeColor : 'rgba(255,255,255,0.12)',
-                color: activeIndex === index ? '#fff' : 'rgba(255,255,255,0.55)',
+                background: activeIndex === index ? TAB_THEME[period].activeBg : TAB_THEME[period].inactiveBg,
+                color: activeIndex === index ? TAB_THEME[period].activeText : TAB_THEME[period].inactiveText,
                 transition: 'all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                boxShadow: activeIndex === index ? `0 4px 12px ${activeColor}55` : 'none',
+                boxShadow: activeIndex === index ? `0 2px 8px rgba(0,0,0,0.2)` : 'none',
                 whiteSpace: 'nowrap',
               }}
             >
@@ -769,7 +630,7 @@ export function MuseumView() {
                               transform: `translate(-50%, -50%) rotate(${item.rotation}deg)`,
                               userSelect: 'none', cursor: 'grab', touchAction: 'none',
                               zIndex: isSelected ? 6 : item.kind === 'avatar' ? 3 : 1,
-                              outline: isSelected ? '2px dashed rgba(167,139,250,0.7)' : 'none',
+                              outline: (isSelected && item.kind !== 'avatar') ? '2px dashed rgba(167,139,250,0.7)' : 'none',
                               borderRadius: '4px',
                             }}
                           >
@@ -778,9 +639,10 @@ export function MuseumView() {
                             ) : item.kind === 'tag' ? (
                               <span style={{
                                 display: 'block', fontSize: `${item.size}px`,
-                                background: 'rgba(167,139,250,0.12)', color: item.color ?? '#6d28d9',
+                                background: item.color ? `${item.color}22` : PERIOD_TAG_COLORS[period].bg,
+                                color: item.color ?? PERIOD_TAG_COLORS[period].text,
                                 padding: '2px 8px', borderRadius: '10px',
-                                border: `1px solid ${item.color ?? '#6d28d9'}55`,
+                                border: `1px solid ${item.color ? `${item.color}55` : PERIOD_TAG_COLORS[period].border}`,
                                 whiteSpace: 'nowrap', fontFamily: 'system-ui, sans-serif', fontWeight: 500,
                               }}>{item.content}</span>
                             ) : (
@@ -790,214 +652,6 @@ export function MuseumView() {
                         )
                       })}
 
-                      {/* Adjustment panel */}
-                      {panelItem && (
-                        <div
-                          onPointerDown={e => e.stopPropagation()}
-                          onClick={e => e.stopPropagation()}
-                          style={{
-                            position: 'absolute', bottom: 0, left: 0, right: 0,
-                            background: 'rgba(5,4,14,0.84)', backdropFilter: 'blur(8px)',
-                            padding: '10px 12px', zIndex: 10,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                            <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.40)', flexShrink: 0, width: '20px' }}>大</span>
-                            <input type="range"
-                              min={panelItem.kind === 'avatar' ? 40 : 12}
-                              max={panelItem.kind === 'avatar' ? 160 : 48}
-                              value={panelItem.size}
-                              onChange={e => updateItem(panelItem.id, { size: Number(e.target.value) })}
-                              style={{ flex: 1, accentColor: '#a78bfa' }}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.40)', flexShrink: 0, width: '20px' }}>回転</span>
-                            <div style={{ flex: 1, position: 'relative' }}>
-                              <input type="range"
-                                min={-180} max={180} step={1}
-                                value={panelItem.rotation}
-                                onChange={e => {
-                                  const val = Number(e.target.value)
-                                  updateItem(panelItem.id, { rotation: Math.abs(val) < 5 ? 0 : val })
-                                }}
-                                style={{ width: '100%', accentColor: '#a78bfa', display: 'block' }}
-                              />
-                              <div style={{
-                                position: 'absolute', top: '50%', left: '50%',
-                                transform: 'translate(-50%, -100%)',
-                                width: '2px', height: '8px',
-                                background: 'rgba(255,255,255,0.35)', pointerEvents: 'none',
-                              }} />
-                            </div>
-                            <span style={{ fontSize: '9px', color: '#a78bfa', flexShrink: 0, width: '28px', textAlign: 'right' }}>
-                              {panelItem.rotation}°
-                            </span>
-                          </div>
-
-                          {/* Fashion / Pose quick buttons */}
-                          {panelItem.kind === 'avatar' && (
-                            <>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 12px 4px' }}>
-                                <button
-                                  onClick={() => setCanvasEditSubPanel(canvasEditSubPanel === 'fashion' ? null : 'fashion')}
-                                  style={{
-                                    width: '100%', padding: '10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                                    background: canvasEditSubPanel === 'fashion' ? '#a78bfa' : 'rgba(255,255,255,0.12)',
-                                    color: canvasEditSubPanel === 'fashion' ? '#fff' : 'rgba(255,255,255,0.40)',
-                                    fontSize: '13px', fontWeight: 600, textAlign: 'left',
-                                  }}
-                                >
-                                  👗 ファッション
-                                </button>
-                                <button
-                                  onClick={() => setCanvasEditSubPanel(canvasEditSubPanel === 'pose' ? null : 'pose')}
-                                  style={{
-                                    width: '100%', padding: '10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                                    background: canvasEditSubPanel === 'pose' ? '#a78bfa' : 'rgba(255,255,255,0.12)',
-                                    color: canvasEditSubPanel === 'pose' ? '#fff' : 'rgba(255,255,255,0.40)',
-                                    fontSize: '13px', fontWeight: 600, textAlign: 'left',
-                                  }}
-                                >
-                                  🕺 ポーズ
-                                </button>
-                              </div>
-
-                              {canvasEditSubPanel === 'fashion' && (
-                                <div style={{ overflowY: 'auto', maxHeight: '160px', marginBottom: '4px' }}>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {savedOutfits.map(outfit => (
-                                      <div key={outfit.id}
-                                        onClick={() => {
-                                          setClothingTop(outfit.top)
-                                          setClothingTopColor(outfit.topColor)
-                                          setClothingBottom(outfit.bottom)
-                                          setClothingBottomColor(outfit.bottomColor)
-                                          setClothingShoes(outfit.shoes)
-                                          setClothingShoesColor(outfit.shoesColor)
-                                          setClothingOuter(outfit.outer)
-                                          setSelectedOutfitId(outfit.id)
-                                          setCanvasEditSubPanel(null)
-                                        }}
-                                        style={{
-                                          display: 'flex', alignItems: 'center', gap: '10px',
-                                          padding: '8px 10px', borderRadius: '10px', cursor: 'pointer',
-                                          background: selectedOutfitId === outfit.id ? 'rgba(167,139,250,0.22)' : 'rgba(255,255,255,0.07)',
-                                          boxShadow: selectedOutfitId === outfit.id ? '0 0 0 1.5px #a78bfa' : 'none',
-                                        }}
-                                      >
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flexShrink: 0 }}>
-                                          <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: outfit.topColor }} />
-                                          <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: outfit.bottomColor }} />
-                                          <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: outfit.shoesColor }} />
-                                        </div>
-                                        <div style={{ flex: 1 }} onClick={e => e.stopPropagation()}>
-                                          {editingOutfitId === outfit.id ? (
-                                            <input
-                                              autoFocus
-                                              value={editingOutfitName}
-                                              onChange={e => setEditingOutfitName(e.target.value)}
-                                              onBlur={() => {
-                                                setSavedOutfits(prev => prev.map(o =>
-                                                  o.id === outfit.id ? { ...o, name: editingOutfitName || o.name } : o
-                                                ))
-                                                setEditingOutfitId(null)
-                                              }}
-                                              onKeyDown={e => {
-                                                if (e.key === 'Enter') {
-                                                  setSavedOutfits(prev => prev.map(o =>
-                                                    o.id === outfit.id ? { ...o, name: editingOutfitName || o.name } : o
-                                                  ))
-                                                  setEditingOutfitId(null)
-                                                }
-                                              }}
-                                              style={{
-                                                background: 'transparent',
-                                                borderWidth: 0, borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: '#a78bfa',
-                                                color: 'rgba(255,255,255,0.82)', fontSize: '12px', fontWeight: 600,
-                                                outline: 'none', width: '100%',
-                                              }}
-                                            />
-                                          ) : (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                              <p style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.82)', margin: 0 }}>{outfit.name}</p>
-                                              <button
-                                                onClick={e => {
-                                                  e.stopPropagation()
-                                                  setEditingOutfitId(outfit.id)
-                                                  setEditingOutfitName(outfit.name)
-                                                }}
-                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '10px', color: 'rgba(255,255,255,0.40)', padding: '0 2px' }}
-                                              >
-                                                ✏️
-                                              </button>
-                                            </div>
-                                          )}
-                                          <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.40)', margin: 0, marginTop: '1px' }}>{outfit.top} / {outfit.bottom}</p>
-                                        </div>
-                                        {selectedOutfitId === outfit.id && <span style={{ color: '#a78bfa', fontSize: '14px', flexShrink: 0 }}>✓</span>}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {canvasEditSubPanel === 'pose' && (
-                                <div style={{ marginBottom: '4px' }}>
-                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-                                    {[
-                                      { val: 'normal',   label: '通常',    emoji: '🧍' },
-                                      { val: 'arms_up',  label: '両手',    emoji: '🙌' },
-                                      { val: 'one_hand', label: '片手',    emoji: '🙋' },
-                                      { val: 'lean',     label: '寄り',    emoji: '😎' },
-                                      { val: 'cross',    label: '腕組み',  emoji: '🤞' },
-                                      { val: 'peace',    label: 'ピース',  emoji: '✌️' },
-                                      { val: 'sit',      label: '座る',    emoji: '🪑' },
-                                      { val: 'jump',     label: 'ジャンプ', emoji: '🦘' },
-                                    ].map(({ val, label, emoji }) => (
-                                      <div key={val}
-                                        onClick={() => setCanvasEditSubPanel(null)}
-                                        style={{
-                                          padding: '8px 4px 6px', borderRadius: '10px', cursor: 'pointer',
-                                          textAlign: 'center', background: 'rgba(255,255,255,0.07)',
-                                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
-                                        }}
-                                      >
-                                        <span style={{ fontSize: '22px' }}>{emoji}</span>
-                                        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.40)' }}>{label}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          )}
-
-                          {panelItem.kind === 'tag' && (
-                            <ColorPicker color={panelItem.color ?? '#7C3AED'} onChange={c => updateItem(panelItem.id, { color: c })} />
-                          )}
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              onClick={() => setSelectedItemId(null)}
-                              style={{
-                                flex: 1, fontSize: '12px', padding: '5px', borderRadius: '6px',
-                                background: 'rgba(255,255,255,0.12)', color: 'white',
-                                border: '1px solid rgba(255,255,255,0.18)',
-                              }}
-                            >完了</button>
-                            {panelItem.kind !== 'avatar' && (
-                              <button
-                                onClick={() => deleteItem(panelItem.id)}
-                                style={{
-                                  fontSize: '12px', padding: '5px 12px', borderRadius: '6px',
-                                  background: 'rgba(239,68,68,0.16)', color: '#f87171',
-                                  border: '1px solid rgba(239,68,68,0.26)',
-                                }}
-                              >🗑️</button>
-                            )}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )
@@ -1033,7 +687,7 @@ export function MuseumView() {
         pointerEvents: activeIndex === 1 ? 'auto' : 'none',
         overflow: 'hidden',
       }}>
-        <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none', overflowY: 'auto', paddingBottom: '80px' }}>
           <div style={{ height: '120px', background: profileHeaderGradient, position: 'relative', flexShrink: 0 }}>
             <button onClick={() => openSubPage('profile-edit')} style={{
               position: 'absolute', top: '14px', right: '16px',
@@ -1047,13 +701,6 @@ export function MuseumView() {
               <ProfileAvatar config={avatarConfig} />
             </div>
             <div style={{ height: '44px' }} />
-            <div style={{ padding: '0 16px 10px' }}>
-              <button onClick={openAvatarEditor} style={{
-                fontSize: '11px', color: 'rgba(255,255,255,0.82)',
-                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.22)',
-                borderRadius: '12px', padding: '4px 12px', backdropFilter: 'blur(4px)',
-              }}>アバターを編集</button>
-            </div>
             <div style={{ padding: '0 16px 14px' }}>
               <div style={{ fontSize: '18px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{displayName}</div>
               <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.42)', marginBottom: '8px' }}>@{userId}</div>
@@ -1076,139 +723,237 @@ export function MuseumView() {
                   <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.42)' }}>つながり</span>
                 </button>
               </div>
-            </div>
-            <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '0 16px' }} />
-            <div style={{ padding: '12px 0' }}>
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '0 16px', scrollbarWidth: 'none' }}>
-                {identityTags.map(tag => (
-                  <span key={tag} style={{
-                    flexShrink: 0, fontSize: '12px', padding: '4px 12px', borderRadius: '14px',
-                    background: 'rgba(167,139,250,0.14)', color: '#c4b5fd',
-                    border: '1px solid rgba(167,139,250,0.26)', whiteSpace: 'nowrap',
-                  }}>{tag}</span>
-                ))}
-              </div>
-            </div>
-            <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '0 16px' }} />
-            <div style={{ padding: '16px 16px 0' }}>
-              <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.45)', marginBottom: '10px', letterSpacing: '1.2px', textTransform: 'uppercase' }}>My Museum</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {[0, 1, 2].map(i => {
-                  const pose = (canvases[i]?.items.find(d => d.kind === 'avatar')?.pose ?? 'stand') as Pose
+
+              {/* プロフィールサブタブ */}
+              <div style={{
+                display: 'flex', gap: '8px', padding: '16px 0 0',
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+                marginBottom: '4px',
+              }}>
+                {(['avatar', 'collection', 'memories'] as const).map(tab => {
+                  const labels = { avatar: 'My Avatar', collection: 'Collection', memories: 'Memories' }
+                  const on = activeProfileTab === tab
                   return (
-                    <button key={i} onClick={() => setActiveIndex(0)} style={{
-                      aspectRatio: '3/4', width: '100%', borderRadius: '4px',
-                      background: 'white', border: '4px solid #c0c0c0',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.35), inset 0 0 0 1px #e8e8e8',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                    }}>
-                      <AvatarSVG config={avatarConfig} size={64} pose={pose} />
+                    <button
+                      key={tab}
+                      onClick={() => setActiveProfileTab(tab)}
+                      style={{
+                        flex: 1, padding: '8px 4px', borderRadius: '10px',
+                        background: on ? 'rgba(167,139,250,0.2)' : 'transparent',
+                        color: on ? '#c4b5fd' : 'rgba(255,255,255,0.4)',
+                        border: on ? '1px solid rgba(167,139,250,0.35)' : '1px solid transparent',
+                        fontSize: '12px', fontWeight: on ? 700 : 400,
+                        cursor: 'pointer', transition: 'all 0.15s',
+                      }}
+                    >
+                      {labels[tab]}
                     </button>
                   )
                 })}
               </div>
-            </div>
-            {/* MY FASHION */}
-            <div style={{ padding: '16px 16px 0' }}>
-              <button
-                onClick={() => setFashionExpanded(prev => !prev)}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '0 0 8px', background: 'none', border: 'none', cursor: 'pointer',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <button
-                    onClick={e => {
-                      e.stopPropagation()
-                      const newOutfit = {
-                        id: Date.now(),
-                        name: `コーデ${savedOutfits.length + 1}`,
-                        top: clothingTop, topColor: clothingTopColor,
-                        bottom: clothingBottom, bottomColor: clothingBottomColor,
-                        shoes: clothingShoes, shoesColor: clothingShoesColor,
-                        outer: clothingOuter,
-                      }
-                      setSavedOutfits(prev => [...prev, newOutfit])
-                      setFashionExpanded(true)
-                    }}
-                    style={{
-                      padding: '4px 10px', borderRadius: '12px',
-                      background: '#a78bfa', color: '#fff',
-                      fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
-                      flexShrink: 0,
-                    }}
-                  >
-                    ＋ コーデを追加
-                  </button>
-                  <p style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.45)', letterSpacing: '1.2px', textTransform: 'uppercase', margin: 0 }}>
-                    MY FASHION
-                  </p>
+
+              {/* My Avatar タブ */}
+              {activeProfileTab === 'avatar' && (
+              <div style={{ marginTop: '16px', borderRadius: '16px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                <div style={{ padding: '14px 16px 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>🖼️</span>
+                  <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>My Avatar</span>
                 </div>
-                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px', transition: 'transform 0.2s', display: 'inline-block', transform: fashionExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                  ›
-                </span>
-              </button>
-              {fashionExpanded && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
-                  {savedOutfits.length === 0 ? (
-                    <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', textAlign: 'center', padding: '12px 0', margin: 0 }}>
-                      コーデがまだ登録されていません
-                    </p>
-                  ) : (
-                    savedOutfits.map(outfit => (
-                      <div key={outfit.id}
-                        onClick={() => {
-                          setClothingTop(outfit.top)
-                          setClothingTopColor(outfit.topColor)
-                          setClothingBottom(outfit.bottom)
-                          setClothingBottomColor(outfit.bottomColor)
-                          setClothingShoes(outfit.shoes)
-                          setClothingShoesColor(outfit.shoesColor)
-                          setClothingOuter(outfit.outer)
-                          setSelectedOutfitId(outfit.id)
-                        }}
+                <div style={{ padding: '0 16px 16px' }}>
+                  <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
+                    {/* ＋写真から作成ボタン */}
+                    <div
+                      onClick={() => {
+                        const input = document.createElement('input')
+                        input.type = 'file'
+                        input.accept = 'image/*'
+                        input.onchange = async (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0]
+                          if (!file) return
+                          setIsGeneratingAvatar(true)
+                          setGenerateError(null)
+                          try {
+                            const reader = new FileReader()
+                            reader.onload = async () => {
+                              const base64 = (reader.result as string).split(',')[1]
+                              const res = await fetch('/api/generate-avatar', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ imageBase64: base64 }),
+                              })
+                              const data = await res.json()
+                              if (data.imageUrl) {
+                                const newAvatar = { id: Date.now(), imageUrl: data.imageUrl }
+                                setSavedAvatars(prev => [...prev, newAvatar])
+                                setAvatarConfig(prev => ({ ...prev, rpmUrl: data.imageUrl }))
+                              } else {
+                                setGenerateError('生成に失敗しました')
+                              }
+                              setIsGeneratingAvatar(false)
+                            }
+                            reader.readAsDataURL(file)
+                          } catch {
+                            setGenerateError('エラーが発生しました')
+                            setIsGeneratingAvatar(false)
+                          }
+                        }
+                        input.click()
+                      }}
+                      style={{
+                        flexShrink: 0, width: '72px', height: '104px',
+                        borderRadius: '12px',
+                        border: '2px dashed rgba(167,139,250,0.4)',
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        gap: '4px', cursor: isGeneratingAvatar ? 'wait' : 'pointer',
+                        opacity: isGeneratingAvatar ? 0.6 : 1,
+                      }}
+                    >
+                      {isGeneratingAvatar
+                        ? <span style={{ fontSize: '20px' }}>⏳</span>
+                        : <span style={{ fontSize: '24px', color: '#a78bfa' }}>＋</span>
+                      }
+                      <span style={{ fontSize: '10px', color: 'rgba(167,139,250,0.7)', textAlign: 'center' }}>
+                        {isGeneratingAvatar ? '生成中...' : '写真から\n作成'}
+                      </span>
+                    </div>
+                    {/* 保存済みアバター */}
+                    {savedAvatars.map((av, i) => (
+                      <div
+                        key={av.id}
+                        onClick={() => setAvatarConfig(prev => ({ ...prev, rpmUrl: av.imageUrl }))}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: '10px',
-                          padding: '10px 12px', borderRadius: '12px', cursor: 'pointer',
-                          background: selectedOutfitId === outfit.id ? 'rgba(167,139,250,0.13)' : 'rgba(255,255,255,0.06)',
-                          boxShadow: selectedOutfitId === outfit.id ? '0 0 0 1.5px #a78bfa' : 'none',
+                          flexShrink: 0, width: '72px', height: '104px',
+                          borderRadius: '12px',
+                          border: avatarConfig.rpmUrl === av.imageUrl ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.1)',
+                          background: 'rgba(255,255,255,0.05)',
+                          cursor: 'pointer', overflow: 'hidden',
                         }}
                       >
-                        <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
-                          <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: outfit.topColor }} />
-                          <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: outfit.bottomColor }} />
-                          <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: outfit.shoesColor }} />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.82)', margin: 0 }}>{outfit.name}</p>
-                          <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', margin: '2px 0 0' }}>
-                            {outfit.top} / {outfit.bottom} / {outfit.shoes}{outfit.outer ? ` / ${outfit.outer}` : ''}
-                          </p>
-                        </div>
-                        {selectedOutfitId === outfit.id && <span style={{ color: '#a78bfa', fontSize: '14px' }}>✓</span>}
+                        <img
+                          src={av.imageUrl}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          alt={`アバター${i + 1}`}
+                        />
                       </div>
-                    ))
+                    ))}
+                  </div>
+                  {generateError !== null && (
+                    <p style={{ color: '#f87171', fontSize: '11px', margin: '4px 0 0', textAlign: 'center' }}>{generateError}</p>
+                  )}
+                </div>
+              </div>
+              )}
+
+              {/* Collection タブ */}
+              {activeProfileTab === 'collection' && (
+                <div style={{ padding: '12px 0' }}>
+                  <div style={{ marginBottom: '16px', borderRadius: '16px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                    <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px' }}>🧍</span>
+                      <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>My Avatar</span>
+                    </div>
+                    <div style={{ padding: '0 16px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      {savedAvatars.length === 0 ? (
+                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', margin: '12px 0 0', textAlign: 'center' }}>
+                          アバターがまだありません
+                        </p>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', scrollbarWidth: 'none', paddingTop: '12px' }}>
+                          {savedAvatars.map((av, i) => (
+                            <div
+                              key={av.id}
+                              onClick={() => setAvatarConfig(prev => ({ ...prev, rpmUrl: av.imageUrl }))}
+                              style={{
+                                flexShrink: 0, width: '72px', height: '104px',
+                                borderRadius: '12px',
+                                border: avatarConfig.rpmUrl === av.imageUrl ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.1)',
+                                overflow: 'hidden', cursor: 'pointer',
+                              }}
+                            >
+                              <img src={av.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`アバター${i + 1}`} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ borderRadius: '16px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                    <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px' }}>🏷️</span>
+                        <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>ハッシュタグデザイン</span>
+                      </div>
+                      <span style={{ fontSize: '10px', color: '#a78bfa', background: 'rgba(167,139,250,0.15)', padding: '3px 8px', borderRadius: '8px', border: '1px solid rgba(167,139,250,0.3)' }}>近日公開</span>
+                    </div>
+                    <div style={{ padding: '0 16px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', margin: '12px 0 0', textAlign: 'center' }}>
+                        購入したデザインがここに表示されます
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Memories タブ */}
+              {activeProfileTab === 'memories' && (
+                <div style={{ padding: '12px 0' }}>
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+                    {(['museum', 'chat'] as const).map(t => {
+                      const labels = { museum: '🖼️ ミュージアム', chat: '💬 チャット' }
+                      const on = memoriesTab === t
+                      return (
+                        <button
+                          key={t}
+                          onClick={() => setMemoriesTab(t)}
+                          style={{
+                            flex: 1, padding: '8px', borderRadius: '10px',
+                            background: on ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.05)',
+                            color: on ? '#c4b5fd' : 'rgba(255,255,255,0.4)',
+                            border: on ? '1px solid rgba(167,139,250,0.35)' : '1px solid rgba(255,255,255,0.06)',
+                            fontSize: '12px', fontWeight: on ? 700 : 400, cursor: 'pointer',
+                          }}
+                        >
+                          {labels[t]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {memoriesTab === 'museum' && (
+                    <div style={{ borderRadius: '16px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                      <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>ミュージアムの記録</span>
+                      </div>
+                      <div style={{ padding: '12px 16px' }}>
+                        {museumMemories.length === 0 ? (
+                          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', margin: 0, textAlign: 'center' }}>
+                            まだ記録がありません
+                          </p>
+                        ) : (
+                          museumMemories.map(m => (
+                            <div key={m.id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', margin: '0 0 4px' }}>{m.date}</p>
+                              <p style={{ color: 'white', fontSize: '13px', margin: 0 }}>{m.snapshot}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {memoriesTab === 'chat' && (
+                    <div style={{ borderRadius: '16px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                      <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>チャットの投稿</span>
+                      </div>
+                      <div style={{ padding: '12px 16px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', margin: 0, textAlign: 'center' }}>
+                          近日公開
+                        </p>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
-            </div>
-
-            <div style={{ padding: '20px 16px 80px' }}>
-              <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.45)', marginBottom: '10px', letterSpacing: '1.2px', textTransform: 'uppercase' }}>最近の気持ち</div>
-              {([
-                { text: '今夜は月がきれいだな🌙', time: '22:14' },
-                { text: '新しいアルバム聴いてる。最高すぎる🎵', time: '昨日' },
-                { text: '猫がひざの上から離れなくて作業できない🐱', time: '2日前' },
-              ] as const).map((post, i) => (
-                <div key={i} style={{
-                  background: 'rgba(255,255,255,0.06)', borderRadius: '10px',
-                  padding: '12px', marginBottom: '8px', border: '1px solid rgba(255,255,255,0.08)',
-                }}>
-                  <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, marginBottom: '5px' }}>{post.text}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.32)' }}>{post.time}</div>
-                </div>
-              ))}
             </div>
           </div>
         </div>
@@ -1223,91 +968,158 @@ export function MuseumView() {
         pointerEvents: activeIndex === 2 ? 'auto' : 'none',
       }}>
 
-        {/* ── メイン設定リスト ─────────────────────────────────────── */}
-        <div style={{ overflowY: 'auto', height: '100%', paddingBottom: '80px', scrollbarWidth: 'none' }}>
-
-          {/* 外観 */}
-          <p style={{ fontSize: '12px', color: dt.subText, padding: '16px 16px 6px', letterSpacing: '0.05em', margin: 0 }}>
-            外観
-          </p>
-          <div style={{ marginLeft: '16px', marginRight: '16px', borderRadius: '12px', overflow: 'hidden', marginBottom: '8px' }}>
-            <div
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: dt.border, background: dt.headerBg, cursor: 'pointer' }}
-              onClick={() => setDecorSubPage('wallpaper')}
-            >
-              <span style={{ fontSize: '15px', color: dt.text }}>壁紙</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '13px', color: dt.subText }}>{wallpaper === null ? '時間連動' : '固定'}</span>
-                <span style={{ color: dt.subText, fontSize: '13px' }}>›</span>
-              </div>
-            </div>
-            <div
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: dt.headerBg, cursor: 'pointer' }}
-              onClick={() => setDecorSubPage('theme')}
-            >
-              <span style={{ fontSize: '15px', color: dt.text }}>テーマカラー</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: themeColor }} />
-                <span style={{ color: dt.subText, fontSize: '13px' }}>›</span>
-              </div>
-            </div>
-          </div>
-
-          {/* ドアのアレンジ */}
-          <p style={{ fontSize: '12px', color: dt.subText, padding: '8px 16px 6px', letterSpacing: '0.05em', margin: 0 }}>
-            ドアのアレンジ
-          </p>
-          <div style={{ marginLeft: '16px', marginRight: '16px', borderRadius: '12px', overflow: 'hidden', marginBottom: '8px' }}>
-            <div style={{ padding: '12px 16px', background: dt.headerBg }}>
-              <p style={{ fontSize: '12px', color: dt.subText, margin: '0 0 10px', lineHeight: 1.55 }}>
-                各ドアの編集は Room タブ › 図鑑から行えます
-              </p>
+        {/* ── タブ切り替え ─────────────────────────────────────────── */}
+        <div style={{
+          display: 'flex',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          flexShrink: 0,
+          padding: '0 16px',
+        }}>
+          {(['general', 'custom'] as const).map(tb => {
+            const labels = { general: '一般', custom: 'カスタマイズ' }
+            const on = decoTab === tb
+            return (
               <button
-                onClick={() => setDecorSubPage('zukan')}
+                key={tb}
+                onClick={() => setDecoTab(tb)}
                 style={{
-                  fontSize: '13px', padding: '7px 16px', borderRadius: '10px', cursor: 'pointer',
-                  background: 'rgba(255,255,255,0.08)', color: dt.subText,
-                  borderWidth: '1px', borderStyle: 'solid', borderColor: dt.border,
+                  padding: '10px 16px', fontSize: '13px', fontWeight: 600,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: on ? 'white' : 'rgba(255,255,255,0.4)',
+                  borderBottom: on ? '2px solid #a78bfa' : '2px solid transparent',
+                  marginBottom: '-1px',
                 }}
-              >図鑑を開く</button>
-            </div>
-          </div>
-
-          {/* Museum 編集ボタン */}
-          <p style={{ fontSize: '12px', color: dt.subText, padding: '8px 16px 6px', letterSpacing: '0.05em', margin: 0 }}>
-            Museum 編集ボタン
-          </p>
-          <div style={{ marginLeft: '16px', marginRight: '16px', borderRadius: '12px', overflow: 'hidden', marginBottom: '8px' }}>
-            <div
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: dt.headerBg, cursor: 'pointer' }}
-              onClick={() => setDecorSubPage('emoji')}
-            >
-              <span style={{ fontSize: '15px', color: dt.text }}>絵文字</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '20px', lineHeight: 1 }}>{editBtnEmoji}</span>
-                <span style={{ color: dt.subText, fontSize: '13px' }}>›</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 通知スタイル */}
-          <p style={{ fontSize: '12px', color: dt.subText, padding: '8px 16px 6px', letterSpacing: '0.05em', margin: 0 }}>
-            通知スタイル
-          </p>
-          <div style={{ marginLeft: '16px', marginRight: '16px', borderRadius: '12px', overflow: 'hidden', marginBottom: '8px' }}>
-            <div
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: dt.headerBg, cursor: 'pointer' }}
-              onClick={() => setDecorSubPage('notif')}
-            >
-              <span style={{ fontSize: '15px', color: dt.text }}>通知の表示</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '13px', color: dt.subText }}>{DECO_NOTIFS.find(n => n.val === notifyStyle)?.label ?? ''}</span>
-                <span style={{ color: dt.subText, fontSize: '13px' }}>›</span>
-              </div>
-            </div>
-          </div>
-
+              >{labels[tb]}</button>
+            )
+          })}
         </div>
+
+        {/* ── 一般タブ ─────────────────────────────────────────────── */}
+        {decoTab === 'general' && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', scrollbarWidth: 'none' }}>
+
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>外観</p>
+            <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer' }}
+                onClick={() => setDecorSubPage('wallpaper')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '18px' }}>🖼️</span>
+                  <span style={{ color: 'white', fontSize: '14px' }}>壁紙</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>{wallpaper === null ? '時間連動' : '固定'}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>›</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer' }}
+                onClick={() => setDecorSubPage('theme')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '18px' }}>🎨</span>
+                  <span style={{ color: 'white', fontSize: '14px' }}>テーマカラー</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: themeColor }} />
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>›</span>
+                </div>
+              </div>
+            </div>
+
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>通知</p>
+            <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer' }}
+                onClick={() => setDecorSubPage('notif')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '18px' }}>🔔</span>
+                  <span style={{ color: 'white', fontSize: '14px' }}>通知の表示</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>{DECO_NOTIFS.find(n => n.val === notifyStyle)?.label ?? ''}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>›</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '18px' }}>📳</span>
+                  <span style={{ color: 'white', fontSize: '14px' }}>プッシュ通知</span>
+                </div>
+                <div style={{ width: '44px', height: '26px', borderRadius: '13px', background: '#a78bfa', position: 'relative', cursor: 'pointer' }}>
+                  <div style={{ position: 'absolute', top: '3px', left: '21px', width: '20px', height: '20px', borderRadius: '50%', background: 'white' }} />
+                </div>
+              </div>
+            </div>
+
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>Museum</p>
+            <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer' }}
+                onClick={() => setDecorSubPage('emoji')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '18px' }}>🎭</span>
+                  <span style={{ color: 'white', fontSize: '14px' }}>Museum編集ボタン絵文字</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '16px' }}>{editBtnEmoji}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>›</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer' }}
+                onClick={() => setDecorSubPage('zukan')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '18px' }}>🚪</span>
+                  <span style={{ color: 'white', fontSize: '14px' }}>ドアのアレンジ</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>図鑑から</span>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>›</span>
+                </div>
+              </div>
+            </div>
+
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>アカウント</p>
+            <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
+              <div
+                onClick={() => { if (window.confirm('ログアウトしますか？')) {} }}
+                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                <span style={{ fontSize: '18px' }}>🚪</span>
+                <div>
+                  <p style={{ color: 'white', fontSize: '14px', fontWeight: 600, margin: 0 }}>ログアウト</p>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: '2px 0 0' }}>アカウントからサインアウトする</p>
+                </div>
+              </div>
+              <div
+                onClick={() => {
+                  if (window.confirm('アカウントを削除しますか？\nこの操作は元に戻せません。全てのデータが削除されます。')) {
+                    if (window.confirm('本当に削除しますか？この操作は取り消せません。')) {}
+                  }
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer' }}
+              >
+                <span style={{ fontSize: '18px' }}>🗑️</span>
+                <div>
+                  <p style={{ color: '#f87171', fontSize: '14px', fontWeight: 600, margin: 0 }}>アカウントを削除</p>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: '2px 0 0' }}>全てのデータが完全に削除されます</p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: '20px' }} />
+          </div>
+        )}
+
+        {/* ── カスタマイズタブ ──────────────────────────────────────── */}
+        {decoTab === 'custom' && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', scrollbarWidth: 'none' }}>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>カスタマイズ</p>
+            <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
+              <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '32px', opacity: 0.4 }}>✨</span>
+                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', margin: 0, textAlign: 'center' }}>
+                  カスタマイズ機能は近日公開予定です
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── サブ画面：壁紙 ─────────────────────────────────────────── */}
         <div style={{
@@ -1485,108 +1297,328 @@ export function MuseumView() {
       )}
 
       {/* ── Edit menu modal ───────────────────────────────────────── */}
-      {editMenuOpen && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 9998,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          left: '50%', transform: 'translateX(-50%)',
-          width: '100%', maxWidth: '390px',
-        }} onClick={() => setEditMenuOpen(false)}>
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: '80%',
-              background: dt.bg,
-              borderRadius: '20px',
-              padding: '20px 16px',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-            }}
-          >
-            <p style={{ fontSize: '15px', fontWeight: 700, color: dt.text, textAlign: 'center', marginBottom: '4px', margin: 0 }}>
-              キャンバスを編集
-            </p>
-
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '11px', color: dt.subText, marginBottom: '6px', margin: '0 0 6px' }}>作品名</p>
-              {isEditingTitle ? (
-                <input
-                  autoFocus
-                  value={canvasTitle}
-                  onChange={e => setCanvasTitle(e.target.value)}
-                  onBlur={() => setIsEditingTitle(false)}
-                  onKeyDown={e => e.key === 'Enter' && setIsEditingTitle(false)}
-                  style={{
-                    background: 'transparent',
-                    borderTopWidth: '0', borderLeftWidth: '0', borderRightWidth: '0',
-                    borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: activeColor,
-                    color: dt.text, fontSize: '15px', fontWeight: 600,
-                    textAlign: 'center', outline: 'none', width: '180px',
-                  }}
-                />
-              ) : (
-                <button onClick={() => setIsEditingTitle(true)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: dt.text, fontSize: '15px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  {canvasTitle} <span style={{ fontSize: '12px' }}>✏️</span>
-                </button>
-              )}
-            </div>
-
-            <div style={{ borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: dt.border }} />
-
+      {editMenuOpen && canvasEditMode === 'menu' && (
+        <div onClick={e => e.stopPropagation()} style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: '#1a1a2e', borderRadius: '20px',
+          padding: '20px 16px', width: '280px',
+          border: '1px solid rgba(167,139,250,0.2)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+          zIndex: 30,
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: '0 0 4px' }}>作品名</p>
+            {isEditingTitle ? (
+              <input
+                autoFocus
+                value={canvases[activeCanvas]?.title ?? ''}
+                onChange={e => {
+                  const val = e.target.value
+                  setCanvases(prev => prev.map((c, i) => i === activeCanvas ? { ...c, title: val } : c))
+                }}
+                onBlur={() => setIsEditingTitle(false)}
+                onKeyDown={e => { if (e.key === 'Enter') setIsEditingTitle(false) }}
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(167,139,250,0.4)',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  padding: '4px 8px',
+                  width: '100%',
+                  outline: 'none',
+                }}
+              />
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <p style={{ fontSize: '16px', fontWeight: 700, color: 'white', margin: 0 }}>
+                  {canvases[activeCanvas]?.title || '無題'}
+                </p>
+                <span
+                  onClick={() => setIsEditingTitle(true)}
+                  style={{ fontSize: '14px', cursor: 'pointer', opacity: 0.6 }}
+                >
+                  ✏️
+                </span>
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <button
-              onClick={() => { setEditMenuOpen(false); setIsTitleEditOpen(true) }}
+              onClick={() => setCanvasEditMode('tag-edit')}
               style={{
-                width: '100%', padding: '12px', borderRadius: '14px',
-                background: `${activeColor}22`, color: activeColor,
-                fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
+                border: '1px solid rgba(167,139,250,0.3)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               }}
-            >✏️ タイトルを編集</button>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => { setEditMenuOpen(false); setTagPickerOpen(true) }}
-                style={{
-                  flex: 1, padding: '14px 0', borderRadius: '14px',
-                  background: activeColor, color: '#fff',
-                  fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-                  boxShadow: `0 4px 14px ${activeColor}55`,
-                }}
-              >
-                <span style={{ fontSize: '20px' }}>🏷️</span>
-                タグを選ぶ
-              </button>
-              <button
-                onClick={() => { setEditMenuOpen(false); setEmojiPickerOpen(true) }}
-                style={{
-                  flex: 1, padding: '14px 0', borderRadius: '14px',
-                  background: `${activeColor}22`, color: activeColor,
-                  fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-                }}
-              >
-                <span style={{ fontSize: '20px' }}>✨</span>
-                絵文字を選ぶ
-              </button>
-            </div>
-
+            >🏷️ タグを編集する</button>
             <button
-              onClick={() => { setEditMenuOpen(false); setIsBgEditOpen(true) }}
+              onClick={() => setCanvasEditMode('emoji-edit')}
               style={{
-                width: '100%', padding: '12px', borderRadius: '14px',
-                background: `${dt.border}44`, color: dt.text,
-                fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
+                border: '1px solid rgba(167,139,250,0.3)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              }}
+            >✨ 絵文字を編集する</button>
+            <button
+              onClick={() => setCanvasEditMode('avatar-edit')}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
+                border: '1px solid rgba(167,139,250,0.3)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              }}
+            >🧍 アバターを編集する</button>
+            <button
+              onClick={() => setIsBgEditOpen(true)}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.7)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               }}
             >🖼️ 背景を変更</button>
+            <button
+              onClick={() => { setEditMenuOpen(false); setCanvasEditMode('menu') }}
+              style={{
+                width: '100%', padding: '10px', borderRadius: '12px',
+                background: 'none', color: 'rgba(255,255,255,0.4)',
+                border: 'none', fontSize: '13px', cursor: 'pointer',
+              }}
+            >とじる</button>
+          </div>
+        </div>
+      )}
 
-            <button onClick={() => setEditMenuOpen(false)}
-              style={{ background: 'none', border: 'none', color: dt.subText, fontSize: '13px', cursor: 'pointer', textAlign: 'center', paddingTop: '4px' }}>
-              とじる
-            </button>
+      {editMenuOpen && canvasEditMode === 'tag-edit' && (
+        <div onClick={e => e.stopPropagation()} style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: '#1a1a2e', borderRadius: '20px',
+          padding: '20px 16px', width: '280px',
+          border: '1px solid rgba(167,139,250,0.2)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+          zIndex: 30,
+        }}>
+          <p style={{ textAlign: 'center', fontWeight: 700, color: 'white', fontSize: '15px', margin: '0 0 16px' }}>🏷️ タグを編集する</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              onClick={() => { setItemEditSubMode('move-tag'); setEditMenuOpen(false); setCanvasEditMode('menu') }}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
+                border: '1px solid rgba(167,139,250,0.3)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >既存のタグを編集</button>
+            <button
+              onClick={() => { setTagPickerOpen(true); setEditMenuOpen(false); setCanvasEditMode('menu') }}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
+                border: '1px solid rgba(167,139,250,0.3)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >＋ 新規追加</button>
+            <button
+              onClick={() => setCanvasEditMode('menu')}
+              style={{
+                width: '100%', padding: '10px', borderRadius: '12px',
+                background: 'none', color: 'rgba(255,255,255,0.4)',
+                border: 'none', fontSize: '13px', cursor: 'pointer',
+              }}
+            >← もどる</button>
+          </div>
+        </div>
+      )}
+
+      {editMenuOpen && canvasEditMode === 'emoji-edit' && (
+        <div onClick={e => e.stopPropagation()} style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: '#1a1a2e', borderRadius: '20px',
+          padding: '20px 16px', width: '280px',
+          border: '1px solid rgba(167,139,250,0.2)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+          zIndex: 30,
+        }}>
+          <p style={{ textAlign: 'center', fontWeight: 700, color: 'white', fontSize: '15px', margin: '0 0 16px' }}>✨ 絵文字を編集する</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              onClick={() => { setItemEditSubMode('move-emoji'); setEditMenuOpen(false); setCanvasEditMode('menu') }}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
+                border: '1px solid rgba(167,139,250,0.3)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >既存の絵文字を編集</button>
+            <button
+              onClick={() => { setEmojiPickerOpen(true); setEditMenuOpen(false); setCanvasEditMode('menu') }}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
+                border: '1px solid rgba(167,139,250,0.3)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >＋ 新規追加</button>
+            <button
+              onClick={() => setCanvasEditMode('menu')}
+              style={{
+                width: '100%', padding: '10px', borderRadius: '12px',
+                background: 'none', color: 'rgba(255,255,255,0.4)',
+                border: 'none', fontSize: '13px', cursor: 'pointer',
+              }}
+            >← もどる</button>
+          </div>
+        </div>
+      )}
+
+      {editMenuOpen && canvasEditMode === 'avatar-edit' && (
+        <div onClick={e => e.stopPropagation()} style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: '#1a1a2e', borderRadius: '20px',
+          padding: '20px 16px', width: '280px',
+          border: '1px solid rgba(167,139,250,0.2)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+          zIndex: 30,
+        }}>
+          <p style={{ textAlign: 'center', fontWeight: 700, color: 'white', fontSize: '15px', margin: '0 0 16px' }}>🧍 アバターを編集する</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              onClick={() => { setItemEditSubMode('move-avatar'); setEditMenuOpen(false); setCanvasEditMode('menu') }}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
+                border: '1px solid rgba(167,139,250,0.3)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >既存のアバターを編集</button>
+            <button
+              onClick={() => { setItemEditSubMode('change'); setEditMenuOpen(false); setCanvasEditMode('menu') }}
+              style={{
+                width: '100%', padding: '13px', borderRadius: '12px',
+                background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
+                border: '1px solid rgba(167,139,250,0.3)',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >アバターを変更する</button>
+            <button
+              onClick={() => setCanvasEditMode('menu')}
+              style={{
+                width: '100%', padding: '10px', borderRadius: '12px',
+                background: 'none', color: 'rgba(255,255,255,0.4)',
+                border: 'none', fontSize: '13px', cursor: 'pointer',
+              }}
+            >← もどる</button>
+          </div>
+        </div>
+      )}
+
+      {(itemEditSubMode === 'move-tag' || itemEditSubMode === 'move-emoji' || itemEditSubMode === 'move-avatar') && (
+        <div style={{
+          position: 'fixed', bottom: '84px', left: '50%', transform: 'translateX(-50%)',
+          width: '100%', maxWidth: '390px', zIndex: 50,
+          background: '#1a1a2e',
+          borderTopLeftRadius: '20px', borderTopRightRadius: '20px',
+          borderTop: '1px solid rgba(167,139,250,0.18)',
+          padding: '10px 14px 14px',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <span style={{ color: 'white', fontWeight: 700, fontSize: '13px' }}>
+              {itemEditSubMode === 'move-tag' ? 'タグを編集中' : itemEditSubMode === 'move-emoji' ? '絵文字を編集中' : 'アバターを編集中'}
+            </span>
+            <button
+              onClick={() => setItemEditSubMode(null)}
+              style={{ color: 'rgba(255,255,255,0.5)', background: 'none', border: 'none', fontSize: '12px', cursor: 'pointer' }}
+            >完了</button>
+          </div>
+          {selectedItemId && (
+            <div style={{ maxWidth: '360px', margin: '0 auto' }}>
+              <div style={{ marginBottom: '8px' }}>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', margin: '0 0 4px' }}>大きさ</p>
+                <input
+                  type="range" min="20" max="200" step="1"
+                  value={canvases[activeCanvas]?.items.find(i => i.id === selectedItemId)?.size ?? 60}
+                  onChange={e => {
+                    const val = Number(e.target.value)
+                    setCanvases(prev => prev.map((c, ci) => ci !== activeCanvas ? c : {
+                      ...c,
+                      items: c.items.map(it => it.id === selectedItemId ? { ...it, size: val } : it)
+                    }))
+                  }}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', margin: '0 0 4px' }}>角度</p>
+                <input
+                  type="range" min="-180" max="180" step="1"
+                  value={canvases[activeCanvas]?.items.find(i => i.id === selectedItemId)?.rotation ?? 0}
+                  onChange={e => {
+                    const val = Number(e.target.value)
+                    setCanvases(prev => prev.map((c, ci) => ci !== activeCanvas ? c : {
+                      ...c,
+                      items: c.items.map(it => it.id === selectedItemId ? { ...it, rotation: val } : it)
+                    }))
+                  }}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {itemEditSubMode === 'change' && (
+        <div style={{
+          position: 'fixed', bottom: '56px', left: '50%', transform: 'translateX(-50%)',
+          width: '100%', maxWidth: '390px', zIndex: 50,
+          background: '#1a1a2e',
+          borderTopLeftRadius: '20px', borderTopRightRadius: '20px',
+          borderTop: '1px solid rgba(167,139,250,0.18)',
+          padding: '16px 16px 24px',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>アバターを変更する</span>
+            <button
+              onClick={() => setItemEditSubMode(null)}
+              style={{ color: 'rgba(255,255,255,0.5)', background: 'none', border: 'none', fontSize: '13px', cursor: 'pointer' }}
+            >完了</button>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+            {savedAvatars.map((av, i) => (
+              <div
+                key={av.id}
+                onClick={() => {
+                  setAvatarConfig(prev => ({ ...prev, rpmUrl: av.imageUrl }))
+                  setItemEditSubMode(null)
+                }}
+                style={{
+                  flexShrink: 0, width: '72px', height: '104px',
+                  borderRadius: '12px',
+                  border: avatarConfig.rpmUrl === av.imageUrl ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.1)',
+                  overflow: 'hidden', cursor: 'pointer',
+                }}
+              >
+                <img src={av.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`アバター${i + 1}`} />
+              </div>
+            ))}
+            {savedAvatars.length === 0 && (
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>アバターがまだありません。プロフィールから作成してください。</p>
+            )}
           </div>
         </div>
       )}
@@ -2156,542 +2188,7 @@ export function MuseumView() {
       ))}
 
       {/* ── Avatar editor bottom sheet ───────────────────────────── */}
-      {isAvatarEditorOpen && (
-        <div onClick={e => e.stopPropagation()} style={{
-          position: 'fixed', bottom: '64px', left: '50%', transform: 'translateX(-50%)',
-          width: '100%', maxWidth: '390px', zIndex: 50,
-          background: '#1a1a2e',
-          borderTopLeftRadius: '24px', borderTopRightRadius: '24px',
-          borderTop: '1px solid rgba(167,139,250,0.18)',
-          maxHeight: '75vh', display: 'flex', flexDirection: 'column',
-          paddingBottom: '70px',
-          boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
-        }}>
-          {/* Handle */}
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 0', flexShrink: 0 }}>
-            <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.18)' }} />
-          </div>
 
-          {/* Title bar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 0', flexShrink: 0 }}>
-            <span style={{ fontSize: '15px', fontWeight: 700, color: 'white', letterSpacing: '0.3px' }}>アバター編集</span>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button
-                onClick={() => setEditingConfig(p => ({ ...p, seed: Math.random().toString(36).slice(2, 8) }))}
-                style={{
-                  fontSize: '12px', padding: '5px 10px', borderRadius: '12px',
-                  background: 'rgba(167,139,250,0.15)', color: '#c4b5fd',
-                  border: '1px solid rgba(167,139,250,0.28)',
-                }}
-              >🔀 シャッフル</button>
-              <button onClick={() => setIsAvatarEditorOpen(false)} style={{
-                width: '30px', height: '30px', borderRadius: '50%', fontSize: '14px',
-                background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.60)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>✕</button>
-            </div>
-          </div>
-
-          {/* Preview card */}
-          <div style={{ padding: '12px 16px 4px', flexShrink: 0 }}>
-            <div style={{
-              background: 'linear-gradient(160deg, rgba(124,58,237,0.28) 0%, rgba(10,8,20,0.9) 100%)',
-              borderRadius: '16px', padding: '12px 0',
-              border: '1px solid rgba(167,139,250,0.14)',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
-              display: 'flex', justifyContent: 'center', alignItems: 'center',
-            }}>
-              <AvatarPreview config={editingConfig} size={109} pose="stand" clothing={{ top: clothingTop, bottom: clothingBottom, shoes: clothingShoes, outer: clothingOuter, topColor: clothingTopColor, bottomColor: clothingBottomColor, shoesColor: clothingShoesColor, outerColor: clothingOuterColor }} />
-            </div>
-          </div>
-
-          {/* Category tabs */}
-          <div style={{ display: 'flex', padding: '10px 16px 0', flexShrink: 0, overflowX: 'auto', scrollbarWidth: 'none', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            {EDITOR_TABS.map(({ key, icon, label }) => {
-              const on = editorTab === key
-              return (
-                <button key={key} onClick={() => setEditorTab(key)} style={{
-                  flexShrink: 0, fontSize: '12px', padding: '6px 10px 10px',
-                  background: 'none',
-                  borderTop: 'none', borderLeft: 'none', borderRight: 'none',
-                  borderBottom: on ? '2px solid #a78bfa' : '2px solid transparent',
-                  color: on ? '#c4b5fd' : 'rgba(255,255,255,0.38)',
-                  fontWeight: on ? 600 : 400, transition: 'all 0.15s',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-                }}>
-                  <span style={{ fontSize: '16px' }}>{icon}</span>
-                  <span>{label}</span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Tab content */}
-          <div style={{ overflowY: 'auto', flex: 1, padding: '14px 16px 16px' }}>
-
-            {editorTab === 'skin' && (
-              <>
-                <SectionLabel>肌の色</SectionLabel>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
-                  {SKIN_COLORS.map(c => (
-                    <button key={c} onClick={() => setEditingConfig(p => ({ ...p, skinColor: c }))} style={{
-                      width: '48px', height: '48px', borderRadius: '50%', background: `#${c}`,
-                      border: editingConfig.skinColor === c ? '3px solid white' : '3px solid transparent',
-                      boxShadow: editingConfig.skinColor === c ? '0 0 0 2px #a78bfa' : 'none',
-                    }} />
-                  ))}
-                  <ColorPickerIconButtonNoHash
-                    value={editingConfig.skinColor}
-                    onChange={c => setEditingConfig(p => ({ ...p, skinColor: c }))}
-                  />
-                </div>
-              </>
-            )}
-
-            {editorTab === 'hair-style' && (
-              <>
-                {gender !== '未設定' ? (
-                  <>
-                    <SectionLabel>{gender === '男性' ? '男性向け' : '女性向け'}</SectionLabel>
-                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
-                      {(gender === '男性' ? HAIR_MALE : HAIR_FEMALE).map(hair => {
-                        const on = editingConfig.hair === hair
-                        return (
-                          <button key={hair} onClick={() => setEditingConfig(p => ({ ...p, hair }))} style={{
-                            flexShrink: 0, width: '64px', height: '72px', borderRadius: '10px',
-                            background: on ? 'rgba(124,58,237,0.20)' : 'rgba(255,255,255,0.05)',
-                            border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.10)',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                            transition: 'all 0.15s', overflow: 'hidden', padding: '4px 0 2px',
-                          }}>
-                            <AvatarPreview config={{ ...editingConfig, hair }} size={48} pose="stand" />
-                            <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.38)' }}>{hair}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <SectionLabel>ショート</SectionLabel>
-                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '12px' }}>
-                      {HAIR_SHORT.map(hair => {
-                        const on = editingConfig.hair === hair
-                        return (
-                          <button key={hair} onClick={() => setEditingConfig(p => ({ ...p, hair }))} style={{
-                            flexShrink: 0, width: '64px', height: '72px', borderRadius: '10px',
-                            background: on ? 'rgba(124,58,237,0.20)' : 'rgba(255,255,255,0.05)',
-                            border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.10)',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                            transition: 'all 0.15s', overflow: 'hidden', padding: '4px 0 2px',
-                          }}>
-                            <AvatarPreview config={{ ...editingConfig, hair }} size={48} pose="stand" />
-                            <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.38)' }}>{hair}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <SectionLabel>ロング</SectionLabel>
-                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
-                      {HAIR_LONG.map(hair => {
-                        const on = editingConfig.hair === hair
-                        return (
-                          <button key={hair} onClick={() => setEditingConfig(p => ({ ...p, hair }))} style={{
-                            flexShrink: 0, width: '64px', height: '72px', borderRadius: '10px',
-                            background: on ? 'rgba(124,58,237,0.20)' : 'rgba(255,255,255,0.05)',
-                            border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.10)',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                            transition: 'all 0.15s', overflow: 'hidden', padding: '4px 0 2px',
-                          }}>
-                            <AvatarPreview config={{ ...editingConfig, hair }} size={48} pose="stand" />
-                            <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.38)' }}>{hair}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-
-            {editorTab === 'hair-color' && (
-              <>
-                <SectionLabel>髪の色</SectionLabel>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '4px' }}>
-                  {HAIR_COLORS.map(c => (
-                    <button key={c} onClick={() => setEditingConfig(p => ({ ...p, hairColor: c }))} style={{
-                      width: '40px', height: '40px', borderRadius: '50%', background: `#${c}`,
-                      border: editingConfig.hairColor === c ? '3px solid white' : '3px solid transparent',
-                      boxShadow: editingConfig.hairColor === c ? '0 0 0 2px #a78bfa' : 'none',
-                      outline: c === 'f5deb3' ? '1px solid rgba(255,255,255,0.25)' : 'none',
-                    }} />
-                  ))}
-                  <ColorPickerIconButtonNoHash
-                    value={editingConfig.hairColor}
-                    onChange={c => setEditingConfig(p => ({ ...p, hairColor: c }))}
-                  />
-                </div>
-              </>
-            )}
-
-            {editorTab === 'top' && (
-              <>
-                <div style={{ display: 'flex', gap: '4px', marginBottom: '12px' }}>
-                  {(['outer', 'top', 'bottom', 'shoes'] as const).map(tab => (
-                    <button key={tab} onClick={() => setClothingSubTab(tab)} style={{
-                      flex: 1, padding: '5px 0', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                      background: clothingSubTab === tab ? '#a78bfa' : 'rgba(255,255,255,0.12)',
-                      color: clothingSubTab === tab ? '#fff' : 'rgba(255,255,255,0.45)',
-                      fontSize: '11px', fontWeight: 600,
-                    }}>
-                      {tab === 'outer' ? '🧥 アウター' : tab === 'top' ? '👕 トップス' : tab === 'bottom' ? '👖 ボトムス' : '👟 靴'}
-                    </button>
-                  ))}
-                </div>
-
-                {clothingSubTab === 'outer' && (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '14px' }}>
-                      {OUTER_STYLES.map(({ val, label, svg }) => (
-                        <div key={String(val)} onClick={() => setClothingOuter(val)} style={{
-                          padding: '10px 6px 6px',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                          minHeight: '64px', justifyContent: 'center',
-                          background: clothingOuter === val ? 'rgba(167,139,250,0.13)' : 'rgba(255,255,255,0.07)',
-                          boxShadow: clothingOuter === val ? '0 0 0 2px #a78bfa' : 'none',
-                          color: clothingOuter === val ? '#a78bfa' : 'rgba(255,255,255,0.45)',
-                        }}>
-                          {svg ?? <span style={{ fontSize: '22px' }}>✕</span>}
-                          <span style={{ fontSize: '10px', fontWeight: clothingOuter === val ? 700 : 400 }}>{label}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {clothingOuter !== null && (
-                      <>
-                        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', margin: '0 0 8px' }}>色</p>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          {['#374151','#1a1a2e','#4b5563','#1e3a5f','#7c3aed','#92400e','#dc2626','#ffffff','#d1d5db'].map(c => (
-                            <div key={c} onClick={() => setClothingOuterColor(c)} style={{
-                              width: '30px', height: '30px', borderRadius: '50%', background: c, cursor: 'pointer',
-                              boxShadow: clothingOuterColor === c ? '0 0 0 2px #a78bfa' : '0 0 0 1px rgba(255,255,255,0.12)',
-                            }} />
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
-
-                {clothingSubTab === 'top' && (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '14px' }}>
-                      {TOP_STYLES.map(({ val, label, svg }) => (
-                        <div key={val} onClick={() => setClothingTop(val)} style={{
-                          padding: '10px 6px 6px',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                          background: clothingTop === val ? 'rgba(167,139,250,0.13)' : 'rgba(255,255,255,0.07)',
-                          boxShadow: clothingTop === val ? '0 0 0 2px #a78bfa' : 'none',
-                          color: clothingTop === val ? '#a78bfa' : 'rgba(255,255,255,0.45)',
-                        }}>
-                          {svg}
-                          <span style={{ fontSize: '10px', fontWeight: clothingTop === val ? 700 : 400 }}>{label}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', margin: '0 0 8px' }}>色</p>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {['#8b5cf6','#ec4899','#3b82f6','#10b981','#f59e0b','#ef4444','#1a1a2e','#ffffff','#374151'].map(c => (
-                        <div key={c} onClick={() => setClothingTopColor(c)} style={{
-                          width: '30px', height: '30px', borderRadius: '50%', background: c, cursor: 'pointer',
-                          boxShadow: clothingTopColor === c ? '0 0 0 2px #a78bfa' : '0 0 0 1px rgba(255,255,255,0.12)',
-                        }} />
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {clothingSubTab === 'bottom' && (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '14px' }}>
-                      {BOTTOM_STYLES.map(({ val, label, svg }) => (
-                        <div key={val} onClick={() => setClothingBottom(val)} style={{
-                          padding: '10px 6px 6px',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                          background: clothingBottom === val ? 'rgba(167,139,250,0.13)' : 'rgba(255,255,255,0.07)',
-                          boxShadow: clothingBottom === val ? '0 0 0 2px #a78bfa' : 'none',
-                          color: clothingBottom === val ? '#a78bfa' : 'rgba(255,255,255,0.45)',
-                        }}>
-                          {svg}
-                          <span style={{ fontSize: '10px', fontWeight: clothingBottom === val ? 700 : 400 }}>{label}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', margin: '0 0 8px' }}>色</p>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {['#1e3a5f','#374151','#1a1a2e','#7c3aed','#dc2626','#059669','#ffffff','#92400e','#4b5563'].map(c => (
-                        <div key={c} onClick={() => setClothingBottomColor(c)} style={{
-                          width: '30px', height: '30px', borderRadius: '50%', background: c, cursor: 'pointer',
-                          boxShadow: clothingBottomColor === c ? '0 0 0 2px #a78bfa' : '0 0 0 1px rgba(255,255,255,0.12)',
-                        }} />
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {clothingSubTab === 'shoes' && (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '14px' }}>
-                      {SHOES_STYLES.map(({ val, label, svg }) => (
-                        <div key={val} onClick={() => setClothingShoes(val)} style={{
-                          padding: '10px 6px 6px',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                          background: clothingShoes === val ? 'rgba(167,139,250,0.13)' : 'rgba(255,255,255,0.07)',
-                          boxShadow: clothingShoes === val ? '0 0 0 2px #a78bfa' : 'none',
-                          color: clothingShoes === val ? '#a78bfa' : 'rgba(255,255,255,0.45)',
-                        }}>
-                          {svg}
-                          <span style={{ fontSize: '10px', fontWeight: clothingShoes === val ? 700 : 400 }}>{label}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', margin: '0 0 8px' }}>色</p>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {['#ffffff','#1a1a2e','#92400e','#dc2626','#1e3a5f','#374151','#f59e0b','#ec4899','#6b7280'].map(c => (
-                        <div key={c} onClick={() => setClothingShoesColor(c)} style={{
-                          width: '30px', height: '30px', borderRadius: '50%', background: c, cursor: 'pointer',
-                          boxShadow: clothingShoesColor === c ? '0 0 0 2px #a78bfa' : '0 0 0 1px rgba(255,255,255,0.12)',
-                        }} />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-
-            {editorTab === 'eye' && (
-              <>
-                <SectionLabel>目</SectionLabel>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
-                  {EYE_VARIANTS.map(v => {
-                    const on = editingConfig.eyes === v
-                    return (
-                      <button key={v} onClick={() => setEditingConfig(p => ({ ...p, eyes: v }))} style={{
-                        borderRadius: '10px', padding: '6px 0',
-                        background: on ? 'rgba(124,58,237,0.22)' : 'rgba(255,255,255,0.05)',
-                        border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.08)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                        transition: 'all 0.12s', overflow: 'hidden',
-                      }}>
-                        <AvatarPreview config={{ ...editingConfig, eyes: v }} size={52} pose="stand" />
-                        <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.30)' }}>{v.replace('variant', '')}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-                <SectionLabel>まゆ毛</SectionLabel>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                  {EYEBROW_VARIANTS.map(v => {
-                    const on = editingConfig.eyebrows === v
-                    return (
-                      <button key={v} onClick={() => setEditingConfig(p => ({ ...p, eyebrows: v }))} style={{
-                        borderRadius: '10px', padding: '6px 0',
-                        background: on ? 'rgba(124,58,237,0.22)' : 'rgba(255,255,255,0.05)',
-                        border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.08)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                        transition: 'all 0.12s', overflow: 'hidden',
-                      }}>
-                        <AvatarPreview config={{ ...editingConfig, eyebrows: v }} size={52} pose="stand" />
-                        <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.30)' }}>{v.replace('variant', '')}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-
-            {editorTab === 'mouth' && (
-              <>
-                <SectionLabel>口</SectionLabel>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                  {MOUTH_VARIANTS.map(v => {
-                    const on = editingConfig.mouth === v
-                    return (
-                      <button key={v} onClick={() => setEditingConfig(p => ({ ...p, mouth: v }))} style={{
-                        borderRadius: '10px', padding: '6px 0',
-                        background: on ? 'rgba(124,58,237,0.22)' : 'rgba(255,255,255,0.05)',
-                        border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.08)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                        transition: 'all 0.12s', overflow: 'hidden',
-                      }}>
-                        <AvatarPreview config={{ ...editingConfig, mouth: v }} size={52} pose="stand" />
-                        <span style={{ fontSize: '8px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.30)' }}>{v.replace('variant', '')}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-
-            {editorTab === 'pose' && (
-              <div style={{ padding: '8px 0' }}>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '10px', margin: '0 0 10px' }}>ポーズを選ぶ</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                  {[
-                    { val: 'normal',   label: '通常'   },
-                    { val: 'arms_up',  label: '両手'   },
-                    { val: 'one_hand', label: '片手'   },
-                    { val: 'lean',     label: '寄り'   },
-                    { val: 'cross',    label: '腕組み' },
-                    { val: 'peace',    label: 'ピース' },
-                    { val: 'sit',      label: '座る'   },
-                    { val: 'jump',     label: 'ジャンプ' },
-                  ].map(({ val, label }) => (
-                    <div key={val}
-                      onClick={() => {}}
-                      style={{
-                        padding: '10px 4px 6px',
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        background: 'rgba(255,255,255,0.06)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                      }}
-                    >
-                      <span style={{ fontSize: '28px' }}>🧍</span>
-                      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)' }}>{label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {editorTab === 'fashion' && (
-              <div style={{ padding: '8px 0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <p style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.82)', margin: 0 }}>マイコーデ</p>
-                  <button
-                    onClick={() => {
-                      const newOutfit = {
-                        id: Date.now(),
-                        name: `コーデ${savedOutfits.length + 1}`,
-                        top: clothingTop, topColor: clothingTopColor,
-                        bottom: clothingBottom, bottomColor: clothingBottomColor,
-                        shoes: clothingShoes, shoesColor: clothingShoesColor,
-                        outer: clothingOuter,
-                      }
-                      setSavedOutfits(prev => [...prev, newOutfit])
-                    }}
-                    style={{
-                      padding: '5px 12px', borderRadius: '14px',
-                      background: '#a78bfa', color: '#fff',
-                      fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer',
-                    }}
-                  >
-                    ＋ 今のコーデを保存
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {savedOutfits.map(outfit => (
-                    <div key={outfit.id}
-                      onClick={() => {
-                        setClothingTop(outfit.top)
-                        setClothingTopColor(outfit.topColor)
-                        setClothingBottom(outfit.bottom)
-                        setClothingBottomColor(outfit.bottomColor)
-                        setClothingShoes(outfit.shoes)
-                        setClothingShoesColor(outfit.shoesColor)
-                        setClothingOuter(outfit.outer)
-                        setSelectedOutfitId(outfit.id)
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '12px',
-                        padding: '10px 12px', borderRadius: '12px', cursor: 'pointer',
-                        background: selectedOutfitId === outfit.id ? 'rgba(167,139,250,0.13)' : 'rgba(255,255,255,0.06)',
-                        boxShadow: selectedOutfitId === outfit.id ? '0 0 0 1.5px #a78bfa' : 'none',
-                      }}
-                    >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flexShrink: 0 }}>
-                        <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: outfit.topColor }} />
-                        <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: outfit.bottomColor }} />
-                        <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: outfit.shoesColor }} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.82)', margin: 0 }}>{outfit.name}</p>
-                        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginTop: '2px', margin: '2px 0 0' }}>
-                          {outfit.top} / {outfit.bottom} / {outfit.shoes}{outfit.outer ? ` / ${outfit.outer}` : ''}
-                        </p>
-                      </div>
-                      {selectedOutfitId === outfit.id && (
-                        <span style={{ color: '#a78bfa', fontSize: '16px' }}>✓</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {editorTab === 'accessory' && (
-              <>
-                <SectionLabel>メガネ</SectionLabel>
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-                  {[0, 100].map(prob => {
-                    const on = editingConfig.glassesProbability === prob
-                    return (
-                      <button key={prob} onClick={() => setEditingConfig(p => ({ ...p, glassesProbability: prob }))} style={{
-                        flex: 1, borderRadius: '14px', padding: '14px 0',
-                        background: on ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.05)',
-                        border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.08)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                        transition: 'all 0.15s',
-                      }}>
-                        <AvatarPreview config={{ ...editingConfig, glassesProbability: prob }} size={72} pose="stand" />
-                        <span style={{ fontSize: '12px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.45)' }}>{prob === 0 ? 'なし' : 'あり'}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-                <SectionLabel>ピアス</SectionLabel>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  {[0, 100].map(prob => {
-                    const on = editingConfig.earringsProbability === prob
-                    return (
-                      <button key={prob} onClick={() => setEditingConfig(p => ({ ...p, earringsProbability: prob }))} style={{
-                        flex: 1, borderRadius: '14px', padding: '14px 0',
-                        background: on ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.05)',
-                        border: on ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.08)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                        transition: 'all 0.15s',
-                      }}>
-                        <AvatarPreview config={{ ...editingConfig, earringsProbability: prob }} size={72} pose="stand" />
-                        <span style={{ fontSize: '12px', color: on ? '#c4b5fd' : 'rgba(255,255,255,0.45)' }}>{prob === 0 ? 'なし' : 'あり'}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Save button */}
-          <div style={{ flexShrink: 0, padding: '10px 16px 20px' }}>
-            <button onClick={saveAvatarConfig} style={{
-              width: '100%', height: '52px', borderRadius: '16px', border: 'none',
-              fontSize: '15px', fontWeight: 700, color: 'white',
-              background: 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)',
-              boxShadow: '0 4px 20px rgba(124,58,237,0.45)',
-            }}>保存する ✓</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -2739,16 +2236,9 @@ function SubPageWrapper({ children, title, onBack, rightAction }: {
   )
 }
 
-function ConnectionAvatar({ seed }: { seed: string }) {
-  const [svgString, setSvgString] = useState('')
-  useEffect(() => {
-    setSvgString(createAvatar(adventurer, { seed, backgroundColor: ['b6e3f4'] }).toString().replace('<svg ', '<svg width="100%" '))
-  }, [seed])
+function ConnectionAvatar({ seed: _seed }: { seed: string }) {
   return (
-    <div
-      style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#b6e3f4', border: '2px solid rgba(255,255,255,0.18)' }}
-      dangerouslySetInnerHTML={{ __html: svgString }}
-    />
+    <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#b6e3f4', border: '2px solid rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>👤</div>
   )
 }
 
@@ -2760,61 +2250,22 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Composite avatar: DiceBear face overlaid on hand-drawn SVG body
-function AvatarComposite({
-  config, size, pose, svgString, clothing,
-}: {
-  config: AvatarConfig
-  size: number
-  pose: Pose
-  svgString: string
-  clothing?: ClothingStyle
-}) {
-  return (
-    <div style={{ width: size, height: Math.round(size * 220 / 120), position: 'relative', flexShrink: 0 }}>
-      <svg
-        viewBox="0 0 120 220"
-        fill="none"
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-      >
-        {renderBody(pose, config, clothing)}
-      </svg>
-      {svgString && (
-        <div
-          style={{
-            position: 'absolute', top: '0%', left: '50%',
-            transform: 'translateX(-50%)', width: '75%',
-            pointerEvents: 'none', lineHeight: 0,
-          }}
-          dangerouslySetInnerHTML={{ __html: svgString }}
-        />
-      )}
-    </div>
-  )
-}
 
-// Picker preview — computed synchronously (always client-side in 'use client')
-function AvatarPreview({ config, size = 80, pose = 'stand', clothing }: { config: AvatarConfig; size?: number; pose?: Pose; clothing?: ClothingStyle }) {
-  return <AvatarComposite config={config} size={size} pose={pose} svgString={createAvatarSvg(config)} clothing={clothing} />
-}
-
-// Canvas / profile avatar — SSR-safe via useEffect
+// Canvas / profile avatar
 const AvatarSVG = memo(function AvatarSVG({
-  config,
+  config: _config,
   size = 80,
-  pose = 'stand',
 }: {
   config: AvatarConfig
   size?: number
-  pose?: Pose
+  pose?: string
+  clothing?: Record<string, unknown>
 }) {
-  const [svgString, setSvgString] = useState('')
-
-  useEffect(() => {
-    setSvgString(createAvatarSvg(config))
-  }, [config])
-
-  return <AvatarComposite config={config} size={size} pose={pose} svgString={svgString} />
+  return (
+    <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.6 }}>
+      👤
+    </div>
+  )
 })
 
 // color stored without # (DiceBear format)

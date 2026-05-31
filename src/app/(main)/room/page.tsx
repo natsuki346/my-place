@@ -23,10 +23,14 @@ export default function RoomPage() {
     <div
       className="relative overflow-hidden select-none"
       style={{
-        width:      '100vw',
-        height:     '100dvh',
-        maxWidth:   '390px',
-        margin:     '0 auto',
+        width:     '100vw',
+        height:    '100dvh',
+        maxWidth:  '390px',
+        position:  'fixed',
+        top:       0,
+        left:      '50%',
+        transform: 'translateX(-50%)',
+        overflow:  'hidden',
         background: '#0a0812',
         fontFamily: 'system-ui, sans-serif',
       }}

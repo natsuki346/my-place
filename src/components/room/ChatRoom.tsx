@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { createAvatar } from '@dicebear/core'
 import { adventurer } from '@dicebear/collection'
 import { useTagStore } from '@/store/useTagStore'
+import AvatarChat from '@/components/room/AvatarChat'
 
 // ── Period & Theme ────────────────────────────────────────────────────────────
 
@@ -203,6 +204,37 @@ const INCOMING_MSGS: Record<string, string[]> = {
 const NICKNAMES   = ['すず', 'あお', 'もも', 'かい', 'ゆい', 'なつ']
 const NICK_COLORS = ['#f472b6', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c']
 
+const MOCK_USERS = [
+  { id: 'rin',  name: 'rin',  color: '#f472b6' },
+  { id: 'kei',  name: 'kei',  color: '#60a5fa' },
+  { id: 'yuu',  name: 'yuu',  color: '#34d399' },
+  { id: 'ai',   name: 'ai',   color: '#fbbf24' },
+  { id: 'sora', name: 'sora', color: '#a78bfa' },
+  { id: 'mio',  name: 'mio',  color: '#fb923c' },
+  { id: 'haru', name: 'haru', color: '#38bdf8' },
+  { id: 'nao',  name: 'nao',  color: '#f87171' },
+  { id: 'tomo', name: 'tomo', color: '#4ade80' },
+  { id: 'riku', name: 'riku', color: '#e879f9' },
+]
+
+const AVATAR_MOCK_MESSAGES = [
+  'ひとりの時間が一番落ち着く',
+  '静かな空間が好きすぎる',
+  '大人数の飲み会は苦手だな',
+  '人と話した後はしばらく一人になりたい',
+  '今日も充電できた気がする',
+  'ひとりの時間＝充電時間',
+  '内向型って生きやすい世界になってきた？',
+  '読書してたら気づいたら3時間経ってた',
+  'カフェのひとり席最高すぎる',
+  '静寂って贅沢だよね',
+  'SNSも少し疲れてきた',
+  'ゆっくり話せる人と話したい',
+  '今日はほぼ誰とも話さなかった、最高の1日',
+  '深夜の一人時間が好き',
+  '雨の日に家にいるの幸せすぎる',
+]
+
 const MOCK_MESSAGES: Record<string, Message[]> = {
   myroom: [
     { id: '1', sender: 'ai', text: 'おかえり。今日はどんな一日だった？', timestamp: '今' },
@@ -387,14 +419,42 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
 
   // ── Catchup state ────────────────────────────────────────────────
   const [catchupOpen, setCatchupOpen] = useState(false)
+  const [showCatchUp, setShowCatchUp] = useState(false)
+
+  useEffect(() => {
+    const count = CATCHUP_ROOMS.has(internalTagName) ? MOCK_CATCHUP_ITEMS.length : 0
+    if (count > 0) {
+      setShowCatchUp(true)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Chat state ───────────────────────────────────────────────────
-  const [tab, setTab]           = useState<ChatTab>(hasTabs ? 'timeline' : 'chat')
+  const [tab, setTab]           = useState<ChatTab>('chat')
   const [msgs, setMsgs]         = useState<Message[]>(MOCK_MESSAGES[roomKey] ?? [])
   const [input, setInput]       = useState('')
   const [aiTyping, setAiTyping] = useState(false)
+  const [sharedImages, setSharedImages] = useState<{ id: number; url: string; sender: string; time: string }[]>([])
+  const [isImagesOpen, setIsImagesOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isRoomSettingsOpen, setIsRoomSettingsOpen] = useState(false)
+  const [isRoomMuted, setIsRoomMuted] = useState(false)
+  const [roomSettingsTab, setRoomSettingsTab] = useState<'general' | 'custom'>('general')
+  const [chatSettingsTab, setChatSettingsTab] = useState<'general' | 'custom'>('general')
+  const [roomChatMode, setRoomChatMode] = useState<'chat' | 'avatar'>('chat')
+
+  type AvatarSlot = {
+    senderId: string
+    senderName: string
+    avatarUrl?: string
+    text: string
+    count: number
+    time: string
+  }
+  const [avatarSlots, setAvatarSlots] = useState<AvatarSlot[]>([])
   const bottomRef               = useRef<HTMLDivElement>(null)
   const incomingTimer           = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const chatScrollRef           = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!isIdentity || activeSubRoom === null) return
@@ -426,19 +486,75 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
     return () => { if (incomingTimer.current) clearTimeout(incomingTimer.current) }
   }, [isIdentity, roomKey, activeSubRoom])
 
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+    }
+  }, [msgs])
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+    }
+  }, [])
+
   // ── Handlers ─────────────────────────────────────────────────────
+
+  const updateAvatarSlots = (senderId: string, senderName: string, text: string, avatarUrl?: string) => {
+    setAvatarSlots(prev => {
+      const existingIndex = prev.findIndex(s => s.senderId === senderId)
+
+      if (existingIndex !== -1) {
+        const existing = prev[existingIndex]
+        const without = prev.filter((_, i) => i !== existingIndex)
+        const updated = [
+          ...without,
+          {
+            ...existing,
+            text,
+            count: existing.count + 1,
+            time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]
+        return updated.slice(-4)
+      } else {
+        const newSlot: AvatarSlot = {
+          senderId,
+          senderName,
+          avatarUrl,
+          text,
+          count: 1,
+          time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+        }
+        return [...prev, newSlot].slice(-4)
+      }
+    })
+  }
+
+  useEffect(() => {
+    if (roomChatMode !== 'avatar') return
+    const interval = setInterval(() => {
+      const user = MOCK_USERS[Math.floor(Math.random() * MOCK_USERS.length)]
+      const text = AVATAR_MOCK_MESSAGES[Math.floor(Math.random() * AVATAR_MOCK_MESSAGES.length)]
+      updateAvatarSlots(user.id, user.name, text, undefined)
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [roomChatMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const send = () => {
     const text = input.trim()
     if (!text) return
     setMsgs(prev => [...prev, { id: Date.now().toString(), sender: 'me', text, timestamp: 'たった今' }])
+    updateAvatarSlots('me', 'あなた', text)
     setInput('')
     const total = 3000 + Math.random() * 3000
     setTimeout(() => setAiTyping(true), Math.max(0, total - 1500))
     setTimeout(() => {
       const replies = AI_REPLIES[roomKey] ?? ['...']
+      const replyText = replies[Math.floor(Math.random() * replies.length)]
       setAiTyping(false)
-      setMsgs(prev => [...prev, { id: (Date.now() + 1).toString(), sender: 'ai', text: replies[Math.floor(Math.random() * replies.length)], timestamp: 'たった今' }])
+      setMsgs(prev => [...prev, { id: (Date.now() + 1).toString(), sender: 'ai', text: replyText, timestamp: 'たった今' }])
+      updateAvatarSlots('ai', meta.label, replyText)
     }, total)
   }
 
@@ -516,9 +632,13 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
               style={{ fontSize: '11px', color: t.subText, borderRadius: '12px', padding: '3px 10px', background: 'none', cursor: 'pointer', borderTop: `1px solid ${t.border}`, borderBottom: `1px solid ${t.border}`, borderLeft: `1px solid ${t.border}`, borderRight: `1px solid ${t.border}` }}
             >参加者</button>
             <button
-              onClick={() => setIsExitConfirmOpen(true)}
-              style={{ fontSize: '18px', color: t.subText, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
-            >×</button>
+              onClick={() => setIsRoomSettingsOpen(true)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'rgba(255,255,255,0.5)', fontSize: '18px',
+                padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >⚙️</button>
           </div>
         </header>
 
@@ -542,8 +662,104 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
           </div>
         )}
 
+        {/* Avatar mode */}
+        {roomChatMode === 'avatar' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {Array.from({ length: 4 }).map((_, idx) => {
+              const slot = avatarSlots[idx]
+              const userColor = MOCK_USERS.find(u => u.id === slot?.senderId)?.color ?? '#4c1d95'
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    flex: 1, position: 'relative',
+                    background: slot
+                      ? '#0a0a18'
+                      : '#080810',
+                    borderBottom: idx < 3 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                    overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  {slot ? (
+                    <>
+                      <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '60px', height: '85px', zIndex: 1 }}>
+                        {slot.avatarUrl ? (
+                          <img src={slot.avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} alt={slot.senderName} />
+                        ) : (
+                          <div style={{ width: '100%', height: '100%', background: `linear-gradient(180deg, ${userColor}44 0%, #0a0a18 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px' }}>👤</div>
+                        )}
+                      </div>
+                      <div style={{
+                        position: 'absolute', bottom: '82px',
+                        left: '50%', transform: 'translateX(-50%)',
+                        zIndex: 2, width: '85%',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
+                      }}>
+                        <div style={{
+                          background: 'rgba(255,255,255,0.12)',
+                          borderRadius: '12px', padding: '6px 12px',
+                          backdropFilter: 'blur(12px)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          maxWidth: '100%',
+                          display: 'flex', alignItems: 'center', gap: '6px',
+                        }}>
+                          <p style={{ color: 'white', fontSize: '12px', margin: 0, lineHeight: 1.4, flex: 1 }}>
+                            {slot.text.length > 40 ? slot.text.slice(0, 40) + '…' : slot.text}
+                          </p>
+                          {slot.count > 1 && (
+                            <span style={{
+                              background: 'rgba(167,139,250,0.4)', borderRadius: '10px',
+                              padding: '1px 7px', fontSize: '10px', color: 'white', fontWeight: 700, flexShrink: 0,
+                            }}>+{slot.count - 1}件</span>
+                          )}
+                        </div>
+                        <div style={{ width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid rgba(255,255,255,0.12)' }} />
+                      </div>
+                      <div style={{ position: 'absolute', bottom: '6px', left: '12px', zIndex: 2 }}>
+                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', margin: 0 }}>{slot.senderName}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <p style={{ color: 'rgba(255,255,255,0.12)', fontSize: '12px' }}>—</p>
+                  )}
+                </div>
+              )
+            })}
+            <div style={{
+              flexShrink: 0, padding: '10px 12px 16px',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              background: '#0d0d1a',
+              display: 'flex', gap: '8px', alignItems: 'center',
+            }}>
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="メッセージを入力..."
+                style={{
+                  flex: 1, background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '20px', padding: '10px 16px',
+                  color: 'white', fontSize: '14px', outline: 'none',
+                }}
+              />
+              <button
+                onClick={send}
+                style={{
+                  width: '40px', height: '40px', borderRadius: '50%',
+                  background: '#a78bfa', border: 'none',
+                  color: 'white', fontSize: '18px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >▶</button>
+            </div>
+          </div>
+        )}
+
         {/* Content */}
-        <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
+        <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain', display: roomChatMode === 'avatar' ? 'none' : undefined }}>
           {(forceLocked || activeListTab === 'rooms') ? (
             <>
               {/* Catch up card（常に表示） */}
@@ -579,7 +795,6 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
                     style={{ padding: '16px', background: t.tagBg, borderBottom: `2px solid ${t.tagBorder}` }}>
                     <span style={{ fontSize: '18px' }}>💬</span>
                     <span style={{ flex: 1, color: t.text, fontSize: '15px', fontWeight: 600 }}>ALL</span>
-                    <span style={{ color: t.accent, fontSize: '12px' }}>{sub.memberCount.toLocaleString()}人</span>
                   </button>
                 ) : (
                   <button key={sub.id} onClick={() => setActiveSubRoom(sub)} className="w-full flex items-center gap-3 text-left"
@@ -589,7 +804,6 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
                       {sub.tag.startsWith('#') ? sub.tag.slice(1) : sub.tag}
                       {sub.isNew && <span style={{ marginLeft: '6px', color: t.accent, fontSize: '10px' }}>NEW</span>}
                     </span>
-                    <span style={{ color: t.subText, fontSize: '11px' }}>{sub.memberCount.toLocaleString()}人</span>
                   </button>
                 )
               )}
@@ -754,8 +968,13 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
         <UserProfileSubPage user={viewingUser} onClose={() => setViewingUser(null)} t={t} />
 
         {/* Catchup modal */}
-        {catchupOpen && createPortal(
-          <CatchupModal items={MOCK_CATCHUP_ITEMS} t={t} onClose={() => setCatchupOpen(false)} />,
+        {(catchupOpen || showCatchUp) && createPortal(
+          <CatchupModal
+            items={MOCK_CATCHUP_ITEMS}
+            t={t}
+            onClose={() => { setCatchupOpen(false); setShowCatchUp(false) }}
+            onMarkAction={() => setShowCatchUp(false)}
+          />,
           document.body
         )}
 
@@ -787,12 +1006,121 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
             </div>
           </div>
         )}
+      {/* ルーム設定全画面 */}
+      {isRoomSettingsOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: '#0d0d1a',
+          display: 'flex', flexDirection: 'column',
+          width: '100%',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px',
+            padding: '16px 16px 12px',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+          }}>
+            <button
+              onClick={() => setIsRoomSettingsOpen(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: '20px', display: 'flex', alignItems: 'center', padding: '4px' }}
+            >←</button>
+            <p style={{ color: 'white', fontWeight: 700, fontSize: '16px', margin: 0 }}>ルーム設定</p>
+          </div>
+
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            padding: '28px 16px 24px',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <div style={{
+              width: '72px', height: '72px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, #4c1d95, #2563eb)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '32px', marginBottom: '12px',
+            }}>#</div>
+            <p style={{ color: 'white', fontWeight: 700, fontSize: '18px', margin: '0 0 4px' }}>{meta.label.startsWith('#') ? meta.label.slice(1) : meta.label}</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px', margin: 0 }}>{meta.members}人が参加中</p>
+          </div>
+
+          {/* タブ */}
+          <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0, padding: '0 16px' }}>
+            {(['general', 'custom'] as const).map(tb => {
+              const labels = { general: '一般', custom: 'カスタマイズ' }
+              const on = roomSettingsTab === tb
+              return (
+                <button key={tb} onClick={() => setRoomSettingsTab(tb)} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', color: on ? 'white' : 'rgba(255,255,255,0.4)', borderBottom: on ? '2px solid #a78bfa' : '2px solid transparent', marginBottom: '-1px' }}>
+                  {labels[tb]}
+                </button>
+              )
+            })}
+          </div>
+
+          {roomSettingsTab === 'general' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 600, padding: '16px 20px 8px', margin: 0, letterSpacing: '0.8px' }}>通知</p>
+              <div style={{ margin: '0 16px', borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                <div onClick={() => setIsRoomMuted(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '18px' }}>{isRoomMuted ? '🔕' : '🔔'}</span>
+                    <div>
+                      <p style={{ color: 'white', fontSize: '14px', fontWeight: 600, margin: 0 }}>通知</p>
+                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: '2px 0 0' }}>{isRoomMuted ? 'ミュート中' : 'オン'}</p>
+                    </div>
+                  </div>
+                  <div style={{ width: '44px', height: '26px', borderRadius: '13px', background: isRoomMuted ? 'rgba(255,255,255,0.15)' : '#a78bfa', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', top: '3px', left: isRoomMuted ? '3px' : '21px', width: '20px', height: '20px', borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 600, padding: '20px 20px 8px', margin: 0, letterSpacing: '0.8px' }}>操作</p>
+              <div style={{ margin: '0 16px', borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                <div
+                  onClick={() => { if (window.confirm('このルームを退出しますか？')) { setIsRoomSettingsOpen(false) } }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                >
+                  <span style={{ fontSize: '18px' }}>🚪</span>
+                  <div>
+                    <p style={{ color: '#f87171', fontSize: '14px', fontWeight: 600, margin: 0 }}>ルームを退出</p>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: '2px 0 0' }}>このルームから退出する</p>
+                  </div>
+                </div>
+                <div
+                  onClick={() => { if (window.confirm('このルームを通報しますか？')) { setIsRoomSettingsOpen(false) } }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '18px' }}>⚠️</span>
+                  <div>
+                    <p style={{ color: '#f87171', fontSize: '14px', fontWeight: 600, margin: 0 }}>通報</p>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: '2px 0 0' }}>不適切なコンテンツを報告する</p>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ height: '40px' }} />
+            </div>
+          )}
+
+          {roomSettingsTab === 'custom' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', scrollbarWidth: 'none' as const }}>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>ルームのカスタマイズ</p>
+              <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
+                <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '32px', opacity: 0.4 }}>✨</span>
+                  <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', margin: 0, textAlign: 'center' }}>
+                    ルームのカスタマイズ機能は近日公開予定です
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       </div>
     )
   }
 
   // ── Chat view (friend / my / identity subroom) ───────────────────
-  const showBottom = isIdentity || tab === 'chat'
+  const showBottom = isIdentity && tab !== 'chat'
 
   return (
     <div
@@ -821,15 +1149,47 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: meta.dot }} />
             <span style={{ color: t.subText, fontSize: '11px' }}>{meta.members}</span>
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'rgba(255,255,255,0.5)', fontSize: '18px',
+                padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >⚙️</button>
           </div>
         </header>
+      )}
+
+      {/* Identity subroom mode tabs */}
+      {isIdentity && activeSubRoom !== null && (
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+          <button
+            onClick={() => setRoomChatMode('chat')}
+            style={{
+              flex: 1, padding: '10px', fontSize: '13px', fontWeight: 600,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: roomChatMode === 'chat' ? 'white' : 'rgba(255,255,255,0.4)',
+              borderBottom: roomChatMode === 'chat' ? '2px solid #a78bfa' : '2px solid transparent',
+            }}
+          >💬 チャット</button>
+          <button
+            onClick={() => setRoomChatMode('avatar')}
+            style={{
+              flex: 1, padding: '10px', fontSize: '13px', fontWeight: 600,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: roomChatMode === 'avatar' ? 'white' : 'rgba(255,255,255,0.4)',
+              borderBottom: roomChatMode === 'avatar' ? '2px solid #a78bfa' : '2px solid transparent',
+            }}
+          >🧍 アバター</button>
+        </div>
       )}
 
       {/* Friend tabs */}
       {hasTabs && (
         <div className="flex flex-shrink-0"
           style={{ height: '36px', background: t.headerBg, borderBottom: `1px solid ${t.border}` }}>
-          {(['timeline', 'chat'] as ChatTab[]).map(tb => (
+          {(['chat', 'timeline'] as ChatTab[]).map(tb => (
             <button key={tb} onClick={() => setTab(tb)} className="flex-1 flex items-center justify-center"
               style={{
                 fontSize: '12px',
@@ -838,17 +1198,321 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
                 fontWeight: tab === tb ? 600 : 400,
                 transition: 'color 0.15s',
               }}>
-              {tb === 'timeline' ? 'タイムライン' : 'チャット'}
+              {tb === 'chat' ? 'チャット' : '記録'}
             </button>
           ))}
         </div>
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
+      <div className="flex-1" style={{ overflow: 'hidden', height: '100%' }}>
         {tab === 'timeline'
-          ? <FriendTimelineView msgs={msgs} dot={meta.dot} t={t} onAvatarTap={openUserProfile} />
-          : <ChatView msgs={msgs} aiTyping={aiTyping} bottomRef={bottomRef} t={t} onAvatarTap={openUserProfile} />
+          ? <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+              {sharedImages.length > 0 && (
+                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+                  <div
+                    onClick={() => setIsImagesOpen(p => !p)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '10px 16px', cursor: 'pointer',
+                      background: 'rgba(255,255,255,0.04)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '14px' }}>🖼️</span>
+                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: 600 }}>
+                        画像 ({sharedImages.length})
+                      </span>
+                    </div>
+                    <span style={{
+                      color: 'rgba(255,255,255,0.4)', fontSize: '11px',
+                      transform: isImagesOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s', display: 'inline-block',
+                    }}>▼</span>
+                  </div>
+                  {isImagesOpen && (
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '8px 16px 12px', scrollbarWidth: 'none' }}>
+                      {sharedImages.map(img => (
+                        <div key={img.id} style={{ flexShrink: 0 }}>
+                          <img
+                            src={img.url}
+                            style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.12)', display: 'block', cursor: 'pointer' }}
+                            alt="共有画像"
+                            onClick={() => window.open(img.url, '_blank')}
+                          />
+                          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '9px', margin: '3px 0 0', textAlign: 'center' }}>{img.time}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div style={{
+                flex: 1, overflowY: 'auto', padding: '12px 16px 80px',
+                display: 'flex', flexDirection: 'column', gap: '16px',
+                scrollbarWidth: 'none',
+              }}>
+                {/* ヘッダー */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0 8px' }}>
+                  <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
+                  <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', flexShrink: 0 }}>対話の記録</span>
+                  <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
+                </div>
+
+                {/* メッセージがない場合 */}
+                {msgs.length === 0 && (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    justifyContent: 'center', flex: 1, gap: '12px', paddingTop: '60px',
+                  }}>
+                    <span style={{ fontSize: '40px', opacity: 0.4 }}>💬</span>
+                    <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', margin: 0, textAlign: 'center' }}>
+                      まだメッセージがありません
+                    </p>
+                  </div>
+                )}
+
+                {/* メッセージ一覧 */}
+                {msgs.map((msg) => {
+                  const isMe = msg.sender === 'me'
+                  return (
+                    <div
+                      key={msg.id}
+                      style={{
+                        display: 'flex',
+                        flexDirection: isMe ? 'row-reverse' : 'row',
+                        alignItems: 'flex-end',
+                        gap: '8px',
+                      }}
+                    >
+                      {/* アバターアイコン */}
+                      {!isMe && (
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '50%',
+                          background: 'linear-gradient(135deg, #2d1f5e, #1a1040)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '16px', flexShrink: 0,
+                          border: '1px solid rgba(167,139,250,0.25)',
+                        }}>👤</div>
+                      )}
+
+                      <div style={{
+                        display: 'flex', flexDirection: 'column',
+                        gap: '3px', maxWidth: '74%',
+                        alignItems: isMe ? 'flex-end' : 'flex-start',
+                      }}>
+                        {/* 送信者名（相手のみ） */}
+                        {!isMe && (
+                          <span style={{
+                            color: 'rgba(255,255,255,0.4)', fontSize: '10px',
+                            paddingLeft: '4px', fontWeight: 600,
+                          }}>
+                            {meta.label}
+                          </span>
+                        )}
+
+                        {/* バブル */}
+                        <div style={{
+                          background: isMe
+                            ? 'rgba(109,40,217,0.4)'
+                            : 'rgba(255,255,255,0.07)',
+                          borderRadius: isMe
+                            ? '16px 4px 16px 16px'
+                            : '4px 16px 16px 16px',
+                          padding: '10px 14px',
+                          border: isMe
+                            ? '1px solid rgba(167,139,250,0.3)'
+                            : '1px solid rgba(255,255,255,0.09)',
+                          backdropFilter: 'blur(8px)',
+                        }}>
+                          <p style={{
+                            color: 'white', fontSize: '14px',
+                            margin: 0, lineHeight: 1.55,
+                          }}>
+                            {msg.text}
+                          </p>
+                        </div>
+
+                        {/* 時刻 */}
+                        <span style={{
+                          color: 'rgba(255,255,255,0.28)', fontSize: '10px',
+                          paddingLeft: isMe ? 0 : '4px',
+                          paddingRight: isMe ? '4px' : 0,
+                        }}>
+                          {msg.timestamp}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          : isIdentity && activeSubRoom !== null ? (
+            /* ── Identity subroom: Discord chat or Avatar mode ── */
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {roomChatMode === 'avatar' ? (
+                /* Avatar mode: 4-slot full-bleed */
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    {Array.from({ length: 4 }).map((_, idx) => {
+                      const slot = avatarSlots[idx]
+                      const userColor = MOCK_USERS.find(u => u.id === slot?.senderId)?.color ?? '#4c1d95'
+                      return (
+                        <div key={idx} style={{
+                          flex: 1, position: 'relative',
+                          background: slot ? '#0a0a18' : '#080810',
+                          borderBottom: idx < 3 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                          overflow: 'hidden', minHeight: 0,
+                        }}>
+                          {slot ? (
+                            <>
+                              <div style={{ position: 'absolute', inset: 0 }}>
+                                {slot.avatarUrl ? (
+                                  <img src={slot.avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top center' }} alt={slot.senderName} />
+                                ) : (
+                                  <div style={{ width: '100%', height: '100%', background: `linear-gradient(180deg, ${userColor}44 0%, #0a0a18 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px' }}>👤</div>
+                                )}
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, transparent 40%, rgba(0,0,0,0.3) 100%)' }} />
+                              </div>
+                              <div style={{
+                                position: 'absolute', top: '10px',
+                                left: idx % 2 === 0 ? '12px' : 'auto',
+                                right: idx % 2 === 1 ? '12px' : 'auto',
+                                zIndex: 2, maxWidth: '72%',
+                              }}>
+                                <div style={{
+                                  background: 'rgba(255,255,255,0.92)',
+                                  borderRadius: idx % 2 === 0 ? '4px 14px 14px 14px' : '14px 4px 14px 14px',
+                                  padding: '8px 12px',
+                                  backdropFilter: 'blur(12px)',
+                                  boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '3px' }}>
+                                    <span style={{ color: '#1e1b4b', fontSize: '11px', fontWeight: 700 }}>{slot.senderName}</span>
+                                    {slot.count > 1 && (
+                                      <span style={{ background: 'rgba(109,40,217,0.15)', color: '#7c3aed', borderRadius: '8px', padding: '1px 6px', fontSize: '10px', fontWeight: 700 }}>+{slot.count - 1}件</span>
+                                    )}
+                                  </div>
+                                  <p style={{ color: '#1e1b4b', fontSize: '13px', margin: 0, lineHeight: 1.4 }}>
+                                    {slot.text.length > 45 ? slot.text.slice(0, 45) + '…' : slot.text}
+                                  </p>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <p style={{ color: 'rgba(255,255,255,0.06)', fontSize: '12px', margin: 0 }}>waiting...</p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ flexShrink: 0, padding: '8px 12px 16px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input
+                      value={input}
+                      onChange={e => setInput(e.target.value)}
+                      onKeyDown={onKeyDown}
+                      placeholder="メッセージを入力..."
+                      style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '22px', padding: '10px 16px', color: 'white', fontSize: '14px', outline: 'none' }}
+                    />
+                    <button onClick={send} style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#a78bfa', border: 'none', color: 'white', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>▶</button>
+                  </div>
+                </div>
+              ) : (
+                /* Discord-style chat */
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 0', scrollbarWidth: 'none' }}>
+                    {msgs.map((msg, idx) => {
+                      const prevMsg = msgs[idx - 1]
+                      const isSameSender = prevMsg?.sender === msg.sender
+                      const isMe = msg.sender === 'me'
+                      return (
+                        <div key={msg.id} style={{ padding: isSameSender ? '1px 16px' : '8px 16px 1px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                          <div style={{ width: '36px', flexShrink: 0, marginTop: isSameSender ? 0 : 2 }}>
+                            {!isSameSender && (
+                              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: isMe ? 'linear-gradient(135deg, #5b21b6, #7c3aed)' : 'linear-gradient(135deg, #1e3a5f, #2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', flexShrink: 0 }}>👤</div>
+                            )}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {!isSameSender && (
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '2px' }}>
+                                <span style={{ color: isMe ? '#c4b5fd' : 'rgba(255,255,255,0.85)', fontSize: '13px', fontWeight: 700 }}>
+                                  {isMe ? 'あなた' : msg.sender}
+                                </span>
+                                <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: '10px' }}>{msg.timestamp}</span>
+                              </div>
+                            )}
+                            <p style={{ color: 'rgba(255,255,255,0.88)', fontSize: '14px', margin: 0, lineHeight: 1.5, wordBreak: 'break-word' }}>{msg.text}</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ flexShrink: 0, padding: '8px 12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', background: '#0d0d1a' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '12px', padding: '4px 4px 4px 14px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <input
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        onKeyDown={onKeyDown}
+                        placeholder="メッセージを送る..."
+                        style={{ flex: 1, background: 'none', border: 'none', color: 'white', fontSize: '13px', outline: 'none', padding: '8px 0' }}
+                      />
+                      <button onClick={send} style={{ width: '34px', height: '34px', borderRadius: '8px', background: '#a78bfa', border: 'none', color: 'white', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>▶</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ── Friend chat: AvatarChat ── */
+            <div style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {sharedImages.length > 0 && (
+                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+                  <div onClick={() => setIsImagesOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', cursor: 'pointer', background: 'rgba(255,255,255,0.04)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '14px' }}>🖼️</span>
+                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: 600 }}>画像 ({sharedImages.length})</span>
+                    </div>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', transform: isImagesOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
+                  </div>
+                  {isImagesOpen && (
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '8px 16px 12px', scrollbarWidth: 'none' }}>
+                      {sharedImages.map(img => (
+                        <div key={img.id} style={{ flexShrink: 0 }}>
+                          <img src={img.url} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.12)', display: 'block', cursor: 'pointer' }} alt="共有画像" onClick={() => window.open(img.url, '_blank')} />
+                          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '9px', margin: '3px 0 0', textAlign: 'center' }}>{img.time}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <AvatarChat
+                  partnerName={meta.label}
+                  partnerAvatarUrl={undefined}
+                  myAvatarUrl={undefined}
+                  period={period}
+                  initialMessages={msgs.map(m => ({
+                    id: m.id,
+                    sender: (m.sender === 'me' ? 'me' : 'them') as 'me' | 'them',
+                    text: m.text,
+                    time: m.timestamp ?? '',
+                  }))}
+                  onSend={(text, imageUrl) => {
+                    const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                    if (imageUrl) {
+                      setSharedImages(prev => [...prev, { id: Date.now(), url: imageUrl, sender: 'me', time }])
+                    } else {
+                      const newMsg: Message = { id: Date.now().toString(), sender: 'me', text, timestamp: time }
+                      setMsgs(prev => [...prev, newMsg])
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )
         }
       </div>
 
@@ -877,16 +1541,141 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
 
       {/* Profile sub-page overlay */}
       <UserProfileSubPage user={viewingUser} onClose={() => setViewingUser(null)} t={t} />
+
+      {/* 設定全画面 */}
+      {isSettingsOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: '#0d0d1a',
+          display: 'flex', flexDirection: 'column',
+          width: '100%',
+        }}>
+          {/* ヘッダー */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px',
+            padding: '16px 16px 12px',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+          }}>
+            <button
+              onClick={() => setIsSettingsOpen(false)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'rgba(255,255,255,0.7)', fontSize: '20px',
+                display: 'flex', alignItems: 'center', padding: '4px',
+              }}
+            >←</button>
+            <p style={{ color: 'white', fontWeight: 700, fontSize: '16px', margin: 0 }}>設定</p>
+          </div>
+
+          {/* 相手のプロフィール */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            padding: '28px 16px 24px',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <div style={{
+              width: '80px', height: '80px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, #2d1f5e, #1a1040)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '40px', marginBottom: '12px',
+              border: '2px solid rgba(167,139,250,0.3)',
+            }}>👤</div>
+            <p style={{ color: 'white', fontWeight: 700, fontSize: '18px', margin: '0 0 4px' }}>{meta.label}</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px', margin: 0 }}>{meta.members}</p>
+          </div>
+
+          {/* タブ */}
+          <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0, padding: '0 16px' }}>
+            {(['general', 'custom'] as const).map(tb => {
+              const labels = { general: '一般', custom: 'カスタマイズ' }
+              const on = chatSettingsTab === tb
+              return (
+                <button key={tb} onClick={() => setChatSettingsTab(tb)} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', color: on ? 'white' : 'rgba(255,255,255,0.4)', borderBottom: on ? '2px solid #a78bfa' : '2px solid transparent', marginBottom: '-1px' }}>
+                  {labels[tb]}
+                </button>
+              )
+            })}
+          </div>
+
+          {chatSettingsTab === 'general' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+
+              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 600, padding: '16px 20px 8px', margin: 0, letterSpacing: '0.8px' }}>通知</p>
+              <div style={{ margin: '0 16px', borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                <div onClick={() => setIsMuted(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '18px' }}>{isMuted ? '🔕' : '🔔'}</span>
+                    <p style={{ color: 'white', fontSize: '14px', margin: 0 }}>{isMuted ? 'ミュート中' : 'メッセージ通知'}</p>
+                  </div>
+                  <div style={{ width: '44px', height: '26px', borderRadius: '13px', background: isMuted ? 'rgba(255,255,255,0.15)' : '#a78bfa', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', top: '3px', left: isMuted ? '3px' : '21px', width: '20px', height: '20px', borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 600, padding: '20px 20px 8px', margin: 0, letterSpacing: '0.8px' }}>チャット</p>
+              <div style={{ margin: '0 16px', borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span style={{ fontSize: '18px' }}>🖼️</span>
+                  <div>
+                    <p style={{ color: 'white', fontSize: '14px', margin: 0 }}>共有した画像</p>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: '2px 0 0' }}>チャット・記録タブで確認できます</p>
+                  </div>
+                </div>
+                <div onClick={() => { if (window.confirm('このチャットの履歴を全て削除しますか？この操作は元に戻せません。')) { setIsSettingsOpen(false) } }} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer' }}>
+                  <span style={{ fontSize: '18px' }}>🗑️</span>
+                  <p style={{ color: '#f87171', fontSize: '14px', margin: 0 }}>チャット履歴を削除</p>
+                </div>
+              </div>
+
+              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 600, padding: '20px 20px 8px', margin: 0, letterSpacing: '0.8px' }}>ユーザー</p>
+              <div style={{ margin: '0 16px', borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                <div onClick={() => { if (window.confirm('このユーザーをブロックしますか？')) { setIsSettingsOpen(false) } }} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span style={{ fontSize: '18px' }}>🚫</span>
+                  <div>
+                    <p style={{ color: '#f87171', fontSize: '14px', margin: 0 }}>ブロック</p>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: '2px 0 0' }}>このユーザーのメッセージを受け取らない</p>
+                  </div>
+                </div>
+                <div onClick={() => { if (window.confirm('このユーザーを通報しますか？')) { setIsSettingsOpen(false) } }} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer' }}>
+                  <span style={{ fontSize: '18px' }}>⚠️</span>
+                  <div>
+                    <p style={{ color: '#f87171', fontSize: '14px', margin: 0 }}>通報</p>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: '2px 0 0' }}>不適切なコンテンツを報告する</p>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ height: '40px' }} />
+            </div>
+          )}
+
+          {chatSettingsTab === 'custom' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', scrollbarWidth: 'none' as const }}>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>チャットのカスタマイズ</p>
+              <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
+                <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '32px', opacity: 0.4 }}>✨</span>
+                  <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', margin: 0, textAlign: 'center' }}>
+                    チャットのカスタマイズ機能は近日公開予定です
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 // ── Catchup modal ─────────────────────────────────────────────────────────────
 
-function CatchupModal({ items, t, onClose }: {
+function CatchupModal({ items, t, onClose, onMarkAction }: {
   items: CatchupItem[]
   t: { isNight: boolean; text: string; subText: string; accent: string; border: string }
   onClose: () => void
+  onMarkAction?: () => void
 }) {
   const [index, setIndex]         = useState(0)
   const [replyText, setReplyText] = useState('')
@@ -1026,11 +1815,11 @@ function CatchupModal({ items, t, onClose }: {
           borderTop: `1px solid ${t.border}`,
         }}>
           <button
-            onClick={goNext}
+            onClick={() => { goNext(); onMarkAction?.() }}
             style={{ flex: 1, padding: '16px', background: 'transparent', color: t.text, fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
           >Keep Unread</button>
           <button
-            onClick={goNext}
+            onClick={() => { goNext(); onMarkAction?.() }}
             style={{ flex: 2, padding: '16px', background: '#1a7f4b', color: '#ffffff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
           >Mark as Read</button>
         </div>
