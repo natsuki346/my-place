@@ -17,7 +17,7 @@ function getPeriod(hour: number): Period {
 
 // ── Themes ────────────────────────────────────────────────────────────────────
 
-type Theme = {
+export type Theme = {
   bg:    string
   tab:   string
   nav:   string
@@ -72,7 +72,7 @@ type DoorCustom = {
   knobColor:       string   // ノブ色
 }
 
-type DoorRoom = { key: string; label: string; sublabel: string } & DoorCustom
+export type DoorRoom = { key: string; label: string; sublabel: string } & DoorCustom
 
 type CustomTab = 'door' | 'accent' | 'label' | 'knob'
 
@@ -87,7 +87,7 @@ const DEFAULT_CUSTOM: DoorCustom = {
 }
 
 const DEFAULT_DOORS: DoorRoom[] = [
-  { key: 'myroom',  label: '心の部屋',  sublabel: 'my space', ...DEFAULT_CUSTOM },
+  { key: 'myroom',  label: 'MyDoor',  sublabel: 'デフォルトドアデザイン', ...DEFAULT_CUSTOM },
   { key: 'friend1', label: 'Hana',       sublabel: 'friend',   ...DEFAULT_CUSTOM },
   { key: 'friend2', label: 'Ryo',        sublabel: 'friend',   ...DEFAULT_CUSTOM },
   { key: 'id1',     label: '#内向型',    sublabel: '247人',    ...DEFAULT_CUSTOM },
@@ -148,9 +148,9 @@ function DoorPreview({ custom, W: propW, H: propH }: { custom: DoorCustom; W?: n
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-type DoorHallProps = { onEnterRoom: (key: string) => void }
+type DoorHallProps = { onEnterRoom: (key: string) => void; onBack?: () => void; initialView?: 'list' }
 
-export function DoorHall({ onEnterRoom }: DoorHallProps) {
+export function DoorHall({ onEnterRoom, onBack, initialView }: DoorHallProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const onEnterRef   = useRef(onEnterRoom)
   onEnterRef.current = onEnterRoom
@@ -161,10 +161,11 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   const [favorites,          setFavorites]          = useState<string[]>([])
   const [showFavorites,      setShowFavorites]      = useState(false)
   const [doors,              setDoors]              = useState<DoorRoom[]>(DEFAULT_DOORS)
+  const [customizedKeys,     setCustomizedKeys]     = useState<Set<string>>(new Set())
   const [customizingDoorId,  setCustomizingDoorId]  = useState<string | null>(null)
   const [draftCustom,        setDraftCustom]        = useState<DoorCustom>(DEFAULT_CUSTOM)
   const [customTab,          setCustomTab]          = useState<CustomTab>('door')
-  const [isLibraryOpen,      setIsLibraryOpen]      = useState(false)
+  const [isLibraryOpen,      setIsLibraryOpen]      = useState(initialView === 'list')
   const [selectedDoor,       setSelectedDoor]       = useState<string | null>(null)
   const [doorAnimState,      setDoorAnimState]      = useState<DoorAnimState>('idle')
 
@@ -181,6 +182,12 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
   useEffect(() => {
     setSubPageOpen(isLibraryOpen)
   }, [isLibraryOpen, setSubPageOpen])
+
+  useEffect(() => {
+    return () => {
+      setSubPageOpen(false)
+    }
+  }, [setSubPageOpen])
 
   // Sync period on mount + every minute
   useEffect(() => {
@@ -450,22 +457,25 @@ export function DoorHall({ onEnterRoom }: DoorHallProps) {
         />
       </div>
 
-      {/* ── 図鑑ボタン ───────────────────────────────────────────── */}
-      <div className="flex-shrink-0 flex justify-center py-2 mb-32">
-        <button
-          onClick={() => setIsLibraryOpen(true)}
-          style={{ background: 'rgba(255,255,255,0.82)', borderRadius: '999px', padding: '7px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.14)', fontSize: '13px', fontWeight: 600, color: '#374151', display: 'flex', alignItems: 'center', gap: '6px', backdropFilter: 'blur(6px)' }}
-        >
-          📚 図鑑
-        </button>
-      </div>
 
       {/* ── 図鑑サブ画面 ─────────────────────────────────────────── */}
       <DoorLibrary
         isOpen={isLibraryOpen}
-        onClose={() => setIsLibraryOpen(false)}
+        onClose={() => { setIsLibraryOpen(false); onBack?.() }}
         doors={doors}
-        onSaveDoor={(key, custom) => setDoors(prev => prev.map(d => d.key === key ? { ...d, ...custom } : d))}
+        onSaveDoor={(key, custom) => {
+          setDoors(prev => {
+            if (key === 'myroom') {
+              return prev.map(d =>
+                d.key === key || !customizedKeys.has(d.key)
+                  ? { ...d, ...custom }
+                  : d
+              )
+            }
+            setCustomizedKeys(prev => new Set([...prev, key]))
+            return prev.map(d => d.key === key ? { ...d, ...custom } : d)
+          })
+        }}
         theme={theme}
       />
 
@@ -741,9 +751,10 @@ const LIBRARY_TABS = [
   { key: 'friends',  label: 'フレンド' },
 ] as const
 
-function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryProps) {
-  const [expandedKey, setExpandedKey] = useState<string | null>(null)
-  const [draftMap,    setDraftMap]    = useState<Record<string, DoorCustom>>({})
+export function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryProps) {
+  const [expandedKey,    setExpandedKey]    = useState<string | null>(null)
+  const [draftMap,       setDraftMap]       = useState<Record<string, DoorCustom>>({})
+  const [customizedKeys, setCustomizedKeys] = useState<Set<string>>(new Set())
   const [libraryTab,  setLibraryTab]  = useState<'all' | 'identity' | 'friends'>('all')
 
   const pickerRefs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -758,6 +769,12 @@ function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryP
   const accentBg = isDark ? 'rgba(167,139,250,0.12)' : 'rgba(59,130,246,0.09)'
   const expandBg = isDark ? 'rgba(124,58,237,0.06)' : 'rgba(59,130,246,0.03)'
 
+  const PRESET_COLORS = [
+    '#8B5E3C', '#6B4423', '#A0522D', '#CD853F', '#D2691E',
+    '#556B2F', '#2F4F4F', '#4A4A8A', '#8B3A3A', '#1C1C1C',
+    '#F5DEB3', '#FAEBD7', '#DEB887', '#BC8F5F', '#A9A9A9',
+  ]
+
   type ColorSection = { field: keyof DoorCustom; label: string; pickerKey: string; keepAlpha: boolean }
   const COLOR_SECTIONS: ColorSection[] = [
     { field: 'doorColor',       label: 'ドア色',         pickerKey: 'door',      keepAlpha: false },
@@ -765,6 +782,30 @@ function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryP
     { field: 'labelBgColor',    label: 'ラベル背景',     pickerKey: 'labelBg',   keepAlpha: true  },
     { field: 'labelTextColor',  label: 'ラベルテキスト', pickerKey: 'labelText', keepAlpha: false },
     { field: 'knobColor',       label: 'ノブ色',         pickerKey: 'knob',      keepAlpha: false },
+  ]
+
+  const [openPalette, setOpenPalette] = useState<Record<string, boolean>>({})
+
+  const PALETTE_COLORS = [
+    '#000000','#1a1a1a','#333333','#4d4d4d','#666666','#808080','#999999','#b3b3b3',
+    '#1a0000','#330000','#660000','#8B0000','#a52a2a','#b22222','#cc3300','#cd5c5c',
+    '#3d1a00','#6b3300','#8B4513','#a0522d','#cd853f','#d2691e','#daa520','#f4a460',
+    '#1a1a00','#333300','#666600','#808000','#999900','#b8b800','#cccc00','#e6e600',
+    '#001a00','#003300','#006600','#008000','#228b22','#2e8b57','#3cb371','#6b8e23',
+    '#001a1a','#003333','#006666','#008080','#009999','#00b3b3','#00cccc','#00e5e5',
+    '#00001a','#000033','#000066','#00008b','#0000cd','#1a1aff','#4444ff','#6666ff',
+    '#1a001a','#330033','#660066','#800080','#8b008b','#9400d3','#9932cc','#ba55d3',
+    '#1a0011','#330022','#660044','#800040','#990066','#cc0077','#e75480','#ff69b4',
+    '#ffffff','#f5f5f5','#faebd7','#ffe4c4','#ffdab9','#fffacd','#f0fff0','#e0ffff',
+  ]
+
+  const QUICK_COLORS = ['#ff0000','#ff4400','#ffaa00','#ffff00','#00cc00','#00ccaa','#0088ff','#0000ff','#6600ff']
+
+  const DOOR_DEFAULT_COLORS = [
+    '#8B5E3C', '#6B4423', '#A0522D', '#CD853F', '#D2691E',
+    '#556B2F', '#2F4F4F', '#4A4A8A', '#8B3A3A', '#1C1C1C',
+    '#F5DEB3', '#FAEBD7', '#DEB887', '#BC8F5F', '#A9A9A9',
+    '#C0C0C0', '#808080',
   ]
 
   const toggleExpand = (door: DoorRoom) => {
@@ -872,28 +913,44 @@ function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryP
                               { ch: 'r', lbl: 'R', val: rgb.r, col: '#ef4444' },
                               { ch: 'g', lbl: 'G', val: rgb.g, col: '#22c55e' },
                               { ch: 'b', lbl: 'B', val: rgb.b, col: '#3b82f6' },
-                            ] as const).map(({ ch, lbl, val, col }) => (
+                            ] as const).map(({ ch, lbl, val }) => (
                               <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                 <span style={{ fontSize: '10px', color: subCol, width: '10px', flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
-                                <input
-                                  type="range" min={0} max={255} value={val}
-                                  style={{ flex: 1, accentColor: col, cursor: 'pointer' }}
-                                  onChange={e => {
-                                    const n    = parseInt(e.target.value)
-                                    const nr   = ch === 'r' ? n : rgb.r
-                                    const ng   = ch === 'g' ? n : rgb.g
-                                    const nb   = ch === 'b' ? n : rgb.b
-                                    updateColor(door.key, field, rgbToHex(nr, ng, nb) + alphaSfx)
-                                  }}
-                                />
+                                <div style={{ position: 'relative', flex: 1, height: '20px', display: 'flex', alignItems: 'center' }}>
+                                  <div style={{
+                                    position: 'absolute', left: 0, right: 0, height: '6px',
+                                    borderRadius: '3px',
+                                    background: `linear-gradient(to right, rgb(${ch==='r'?0:rgb.r},${ch==='g'?0:rgb.g},${ch==='b'?0:rgb.b}), rgb(${ch==='r'?255:rgb.r},${ch==='g'?255:rgb.g},${ch==='b'?255:rgb.b}))`,
+                                    pointerEvents: 'none',
+                                  }} />
+                                  <input
+                                    type="range" min={0} max={255} value={val}
+                                    style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, cursor: 'pointer', height: '20px', margin: 0 }}
+                                    onChange={e => {
+                                      const n    = parseInt(e.target.value)
+                                      const nr   = ch === 'r' ? n : rgb.r
+                                      const ng   = ch === 'g' ? n : rgb.g
+                                      const nb   = ch === 'b' ? n : rgb.b
+                                      updateColor(door.key, field, rgbToHex(nr, ng, nb) + alphaSfx)
+                                    }}
+                                  />
+                                  <div style={{
+                                    position: 'absolute',
+                                    left: `calc(${val / 255 * 100}% - 8px)`,
+                                    width: '16px', height: '16px', borderRadius: '50%',
+                                    background: 'white',
+                                    boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                                    pointerEvents: 'none',
+                                  }} />
+                                </div>
                                 <span style={{ fontSize: '10px', color: subCol, width: '22px', textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{val}</span>
                               </div>
                             ))}
                           </div>
-                          {/* Native picker trigger */}
+                          {/* 🎨 palette toggle */}
                           <button
-                            onClick={() => pickerRefs.current[refKey]?.click()}
-                            style={{ flexShrink: 0, width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '7px', background: accentBg, border: `1px solid ${accent}55`, fontSize: '14px', cursor: 'pointer' }}
+                            onClick={() => setOpenPalette(prev => ({ ...prev, [refKey]: !prev[refKey] }))}
+                            style={{ flexShrink: 0, width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '7px', background: openPalette[refKey] ? accent : accentBg, border: `1px solid ${accent}55`, fontSize: '14px', cursor: 'pointer' }}
                           >🎨</button>
                           <input
                             type="color"
@@ -903,10 +960,61 @@ function DoorLibrary({ isOpen, onClose, doors, onSaveDoor, theme }: DoorLibraryP
                             onChange={e => updateColor(door.key, field, e.target.value + alphaSfx)}
                           />
                         </div>
+                        {/* Expandable full palette */}
+                        {openPalette[refKey] && (
+                          <div style={{ background: '#1a1a2e', borderRadius: '12px', padding: '10px', marginTop: '8px' }}>
+                            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', margin: '0 0 4px' }}>おすすめ</p>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                              {DOOR_DEFAULT_COLORS.map(color => (
+                                <button key={color} onClick={() => updateColor(door.key, field, color + alphaSfx)} style={{ width: '22px', height: '22px', borderRadius: '4px', background: color, border: hex6 === color ? '2px solid #a855f7' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
+                              {PALETTE_COLORS.map((color, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => updateColor(door.key, field, color + alphaSfx)}
+                                  style={{
+                                    width: '22px', height: '22px', borderRadius: '3px',
+                                    background: color,
+                                    border: hex6.toLowerCase() === color.toLowerCase() ? '2px solid #a855f7' : '1px solid rgba(255,255,255,0.1)',
+                                    cursor: 'pointer', flexShrink: 0, padding: 0,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                              {QUICK_COLORS.map(color => (
+                                <button
+                                  key={color}
+                                  onClick={() => updateColor(door.key, field, color + alphaSfx)}
+                                  style={{
+                                    width: '24px', height: '24px', borderRadius: '50%',
+                                    background: color,
+                                    border: hex6.toLowerCase() === color.toLowerCase() ? '2px solid white' : '1px solid rgba(255,255,255,0.2)',
+                                    cursor: 'pointer', flexShrink: 0, padding: 0,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
 
+                  {/* Apply all button (MyDoor only) */}
+                  {door.key === 'myroom' && draft && (
+                    <button
+                      onClick={() => {
+                        setCustomizedKeys(new Set())
+                        onSaveDoor(door.key, draft)
+                        setDraftMap(prev => { const n = { ...prev }; delete n[door.key]; return n })
+                        setExpandedKey(null)
+                      }}
+                      style={{ width: '100%', padding: '11px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', marginBottom: '8px', cursor: 'pointer' }}
+                    >全てのドアに適用する</button>
+                  )}
                   {/* Save */}
                   <button
                     onClick={() => {
@@ -1137,3 +1245,279 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 function rgbToHex(r: number, g: number, b: number): string {
   return '#' + [r, g, b].map(x => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0')).join('')
 }
+
+// ── DoorFullEditor ────────────────────────────────────────────────────────────
+
+type DecorItem = {
+  id: string
+  kind: 'photo' | 'tag' | 'emoji'
+  content: string
+  x: number
+  y: number
+  size: number
+  tagBg?: string
+  tagColor?: string
+}
+
+type DoorFullEditorProps = {
+  doorKey: string
+  label: string
+  initialCustom: DoorCustom
+  onSave: (custom: DoorCustom) => void
+  onBack: () => void
+}
+
+const EDITOR_EMOJIS = [
+  '🌸','🌺','🌻','🌷','🍀','🍁','🍂','🌙',
+  '⭐','🌟','💫','✨','🔥','💧','🌊','🌈',
+  '🎀','🎁','🎵','🎶','🏠','🚪','🔑','🗝️',
+  '💎','🪄','🎨','🖼️','🌿','🦋','🐝','🍄',
+]
+
+export function DoorFullEditor({ doorKey, label, initialCustom, onSave, onBack }: DoorFullEditorProps) {
+  type EditorColorSection = { field: keyof DoorCustom; label: string; pickerKey: string; keepAlpha: boolean }
+
+  const [draft, setDraft] = useState<DoorCustom>({ ...initialCustom })
+  const [decorItems, setDecorItems] = useState<DecorItem[]>([])
+  const [selectedDecorId, setSelectedDecorId] = useState<string | null>(null)
+  const [editorTab, setEditorTab] = useState<'color' | 'photo' | 'tag' | 'emoji'>('color')
+  const [openColorSection, setOpenColorSection] = useState<string | null>(null)
+  const [openPaletteEditor, setOpenPaletteEditor] = useState<Record<string, boolean>>({})
+  const [tagInput, setTagInput] = useState('')
+  const [tagBg, setTagBg] = useState('#000000cc')
+  const [tagColor, setTagColor] = useState('#ffffff')
+  const pickerEditorRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const canvasAreaRef = useRef<HTMLDivElement>(null)
+  const dragOffsetRef = useRef<{ ox: number; oy: number } | null>(null)
+  const draggingIdRef = useRef<string | null>(null)
+
+  const EDITOR_COLOR_SECTIONS: EditorColorSection[] = [
+    { field: 'doorColor',       label: 'ドア色',         pickerKey: 'door',      keepAlpha: false },
+    { field: 'doorAccentColor', label: '装飾色',         pickerKey: 'accent',    keepAlpha: false },
+    { field: 'labelBgColor',    label: 'ラベル背景',     pickerKey: 'labelBg',   keepAlpha: true  },
+    { field: 'labelTextColor',  label: 'ラベルテキスト', pickerKey: 'labelText', keepAlpha: false },
+    { field: 'knobColor',       label: 'ノブ色',         pickerKey: 'knob',      keepAlpha: false },
+  ]
+
+  const EDITOR_PALETTE_THEME = [
+    ['#1a0000','#330000','#660000','#990000','#cc0000','#ff0000','#ff4d4d','#ff9999','#ffcccc','#fff0f0'],
+    ['#1a0d00','#331a00','#663300','#994d00','#cc6600','#ff8000','#ffaa4d','#ffcc99','#ffe5cc','#fff5e6'],
+    ['#001a00','#003300','#006600','#009900','#00cc00','#00ff00','#4dff4d','#99ff99','#ccffcc','#f0fff0'],
+    ['#00001a','#000033','#000066','#000099','#0000cc','#0000ff','#4d4dff','#9999ff','#ccccff','#f0f0ff'],
+    ['#0d001a','#1a0033','#330066','#4d0099','#6600cc','#8000ff','#aa4dff','#cc99ff','#e5ccff','#f5e6ff'],
+    ['#0a0a0a','#1a1a1a','#333333','#4d4d4d','#666666','#808080','#999999','#b3b3b3','#cccccc','#e6e6e6'],
+    ['#ffffff','#f5f5f5','#ebebeb','#e0e0e0','#d6d6d6','#cccccc','#c2c2c2','#b8b8b8','#adadad','#a3a3a3'],
+  ]
+  const EDITOR_PALETTE_STD = ['#ff0000','#ff4400','#ffaa00','#ffff00','#00cc00','#00ccaa','#0088ff','#0000ff','#6600ff']
+  const EDITOR_DEFAULTS = ['#8B5E3C','#6B4423','#A0522D','#CD853F','#D2691E','#556B2F','#2F4F4F','#4A4A8A','#8B3A3A','#1C1C1C','#F5DEB3','#FAEBD7','#DEB887','#BC8F5F','#A9A9A9','#C0C0C0','#808080']
+
+  const updateDraft = (field: keyof DoorCustom, hex: string) => setDraft(p => ({ ...p, [field]: hex }))
+
+  const addDecorItem = (item: Omit<DecorItem, 'id'>) => {
+    setDecorItems(p => [...p, { ...item, id: Date.now().toString() }])
+  }
+
+  const handlePointerDown = (e: React.PointerEvent, id: string) => {
+    e.stopPropagation()
+    setSelectedDecorId(id)
+    draggingIdRef.current = id
+    const item = decorItems.find(d => d.id === id)
+    if (!item || !canvasAreaRef.current) return
+    const rect = canvasAreaRef.current.getBoundingClientRect()
+    dragOffsetRef.current = {
+      ox: e.clientX - rect.left - item.x * rect.width / 100,
+      oy: e.clientY - rect.top  - item.y * rect.height / 100,
+    }
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!draggingIdRef.current || !dragOffsetRef.current || !canvasAreaRef.current) return
+    const rect = canvasAreaRef.current.getBoundingClientRect()
+    const nx = Math.min(100, Math.max(0, (e.clientX - rect.left - dragOffsetRef.current.ox) / rect.width * 100))
+    const ny = Math.min(100, Math.max(0, (e.clientY - rect.top  - dragOffsetRef.current.oy) / rect.height * 100))
+    setDecorItems(p => p.map(d => d.id === draggingIdRef.current ? { ...d, x: nx, y: ny } : d))
+  }
+
+  const handlePointerUp = () => { draggingIdRef.current = null; dragOffsetRef.current = null }
+
+  const TABS: { key: 'color' | 'photo' | 'tag' | 'emoji'; icon: string; label: string }[] = [
+    { key: 'color', icon: '🎨', label: 'カラー' },
+    { key: 'photo', icon: '📷', label: '写真' },
+    { key: 'tag',   icon: '🏷️', label: 'タグ' },
+    { key: 'emoji', icon: '✨', label: '絵文字' },
+  ]
+
+  return (
+    <div style={{ height: '100dvh', background: '#0d0a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ height: '52px', flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', gap: 8 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: '14px', minWidth: 60 }}>← 戻る</button>
+        <span style={{ flex: 1, textAlign: 'center', color: 'white', fontSize: '15px', fontWeight: 600 }}>{label}</span>
+        <button onClick={() => onSave(draft)} style={{ minWidth: 60, textAlign: 'right', background: 'none', border: 'none', cursor: 'pointer', color: '#a855f7', fontSize: '14px', fontWeight: 700 }}>保存</button>
+      </div>
+
+      {/* Canvas area */}
+      <div
+        ref={canvasAreaRef}
+        style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0, overflow: 'hidden', touchAction: 'none' }}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onClick={() => setSelectedDecorId(null)}
+      >
+        <DoorPreview custom={draft} W={200} H={300} />
+        {decorItems.map(item => (
+          <div
+            key={item.id}
+            style={{ position: 'absolute', left: `${item.x}%`, top: `${item.y}%`, transform: 'translate(-50%,-50%)', cursor: 'grab', userSelect: 'none', touchAction: 'none' }}
+            onPointerDown={e => handlePointerDown(e, item.id)}
+            onClick={e => { e.stopPropagation(); setSelectedDecorId(item.id) }}
+          >
+            {item.kind === 'photo' && <img src={item.content} style={{ width: item.size, height: item.size * 0.75, objectFit: 'cover', borderRadius: '6px', opacity: 0.9, display: 'block' }} alt="" />}
+            {item.kind === 'tag' && <span style={{ background: item.tagBg ?? 'rgba(0,0,0,0.65)', color: item.tagColor ?? '#fff', fontSize: '11px', padding: '3px 10px', borderRadius: '12px', whiteSpace: 'nowrap' }}>{item.content}</span>}
+            {item.kind === 'emoji' && <span style={{ fontSize: `${item.size}px`, lineHeight: 1 }}>{item.content}</span>}
+            {selectedDecorId === item.id && (
+              <button
+                onPointerDown={e => e.stopPropagation()}
+                onClick={e => { e.stopPropagation(); setDecorItems(p => p.filter(d => d.id !== item.id)); setSelectedDecorId(null) }}
+                style={{ position: 'absolute', top: '-10px', right: '-10px', width: '20px', height: '20px', borderRadius: '50%', background: '#ef4444', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+              >×</button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Edit panel */}
+      <div style={{ height: '50dvh', flexShrink: 0, background: '#1a1528', borderRadius: '20px 20px 0 0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Tab bar */}
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+          {TABS.map(({ key, icon, label: tlabel }) => (
+            <button key={key} onClick={() => setEditorTab(key)} style={{ flex: 1, padding: '10px 4px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', borderBottom: editorTab === key ? '2px solid #a855f7' : '2px solid transparent' }}>
+              <span style={{ fontSize: '16px' }}>{icon}</span>
+              <span style={{ fontSize: '10px', color: editorTab === key ? '#a855f7' : 'rgba(255,255,255,0.4)', fontWeight: editorTab === key ? 600 : 400 }}>{tlabel}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 20px', scrollbarWidth: 'none' }}>
+
+          {/* Color tab */}
+          {editorTab === 'color' && EDITOR_COLOR_SECTIONS.map(({ field, label: sectionLabel, pickerKey, keepAlpha }: EditorColorSection) => {
+            const currHex = draft[field] as string
+            const rgb     = hexToRgb(currHex)
+            const hex6    = currHex.slice(0, 7)
+            const alphaSfx = keepAlpha && currHex.length >= 9 ? currHex.slice(7) : ''
+            const refKey  = `fed-${doorKey}-${pickerKey}`
+            const isOpen  = openColorSection === pickerKey
+            return (
+              <div key={field} style={{ marginBottom: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', overflow: 'hidden' }}>
+                <div onClick={() => setOpenColorSection(isOpen ? null : pickerKey)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer' }}>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '5px', background: hex6, border: '1px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>{sectionLabel}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>{isOpen ? '▼' : '▶'}</span>
+                </div>
+                {isOpen && (
+                  <div style={{ padding: '0 12px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        {([{ ch: 'r', lbl: 'R', val: rgb.r }, { ch: 'g', lbl: 'G', val: rgb.g }, { ch: 'b', lbl: 'B', val: rgb.b }] as const).map(({ ch, lbl, val }) => (
+                          <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', width: '10px', flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                            <div style={{ position: 'relative', flex: 1, height: '20px', display: 'flex', alignItems: 'center' }}>
+                              <div style={{ position: 'absolute', left: 0, right: 0, height: '6px', borderRadius: '3px', background: `linear-gradient(to right, rgb(${ch==='r'?0:rgb.r},${ch==='g'?0:rgb.g},${ch==='b'?0:rgb.b}), rgb(${ch==='r'?255:rgb.r},${ch==='g'?255:rgb.g},${ch==='b'?255:rgb.b}))`, pointerEvents: 'none' }} />
+                              <input type="range" min={0} max={255} value={val}
+                                style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, cursor: 'pointer', height: '20px', margin: 0 }}
+                                onChange={e => { const n = parseInt(e.target.value); const nr = ch==='r'?n:rgb.r; const ng = ch==='g'?n:rgb.g; const nb = ch==='b'?n:rgb.b; updateDraft(field, rgbToHex(nr,ng,nb)+alphaSfx) }}
+                              />
+                              <div style={{ position: 'absolute', left: `calc(${val/255*100}% - 8px)`, width: '16px', height: '16px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', pointerEvents: 'none' }} />
+                            </div>
+                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', width: '22px', textAlign: 'right', flexShrink: 0 }}>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => setOpenPaletteEditor(p => ({ ...p, [refKey]: !p[refKey] }))} style={{ width: '28px', height: '28px', borderRadius: '7px', background: openPaletteEditor[refKey] ? '#a855f7' : 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', fontSize: '14px', cursor: 'pointer', flexShrink: 0 }}>🎨</button>
+                      <input type="color" style={{ display: 'none' }} ref={el => { pickerEditorRefs.current[refKey] = el }} value={hex6} onChange={e => updateDraft(field, e.target.value+alphaSfx)} />
+                    </div>
+                    {openPaletteEditor[refKey] && (
+                      <div style={{ background: '#1a1a2e', borderRadius: '10px', padding: '8px', marginTop: '8px' }}>
+                        <div style={{ display: 'flex', gap: '3px', marginBottom: '6px' }}>
+                          {EDITOR_DEFAULTS.map(c => <button key={c} onClick={() => updateDraft(field, c+alphaSfx)} style={{ width: 20, height: 20, borderRadius: 3, background: c, border: hex6===c?'2px solid #a855f7':'1px solid rgba(255,255,255,0.15)', cursor: 'pointer', padding: 0 }} />)}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', marginBottom: '6px' }}>
+                          {EDITOR_PALETTE_THEME.flat().map((c, i) => <button key={i} onClick={() => updateDraft(field, c+alphaSfx)} style={{ width: 20, height: 14, borderRadius: 2, background: c, border: hex6.toLowerCase()===c.toLowerCase()?'2px solid white':'1px solid rgba(255,255,255,0.1)', cursor: 'pointer', padding: 0 }} />)}
+                        </div>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          {EDITOR_PALETTE_STD.map(c => <button key={c} onClick={() => updateDraft(field, c+alphaSfx)} style={{ width: 22, height: 22, borderRadius: '50%', background: c, border: hex6.toLowerCase()===c.toLowerCase()?'2px solid white':'1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Photo tab */}
+          {editorTab === 'photo' && (
+            <div>
+              <input type="file" accept="image/*" ref={photoInputRef} style={{ display: 'none' }}
+                onChange={e => { const file = e.target.files?.[0]; if (file) addDecorItem({ kind: 'photo', content: URL.createObjectURL(file), x: 50, y: 30, size: 80 }) }}
+              />
+              <button onClick={() => photoInputRef.current?.click()} style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)', fontSize: '14px', cursor: 'pointer', marginBottom: '12px' }}>
+                📷 写真を追加してキャンバスに配置
+              </button>
+              {decorItems.filter(d => d.kind === 'photo').map(item => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '8px' }}>
+                  <img src={item.content} style={{ width: 40, height: 30, objectFit: 'cover', borderRadius: '4px' }} alt="" />
+                  <span style={{ flex: 1, color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>写真</span>
+                  <button onClick={() => setDecorItems(p => p.filter(d => d.id !== item.id))} style={{ background: 'rgba(239,68,68,0.2)', border: 'none', color: '#ef4444', fontSize: '12px', borderRadius: '6px', padding: '3px 8px', cursor: 'pointer' }}>削除</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Tag tab */}
+          {editorTab === 'tag' && (
+            <div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                <input value={tagInput} onChange={e => setTagInput(e.target.value)} placeholder="#タグを入力..."
+                  style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '8px 12px', color: 'white', fontSize: '13px', outline: 'none' }}
+                  onKeyDown={e => { if (e.key === 'Enter' && tagInput.trim()) { addDecorItem({ kind: 'tag', content: '#'+tagInput.trim(), x: 50, y: 70, size: 14, tagBg, tagColor }); setTagInput('') } }}
+                />
+                <button onClick={() => { if (tagInput.trim()) { addDecorItem({ kind: 'tag', content: '#'+tagInput.trim(), x: 50, y: 70, size: 14, tagBg, tagColor }); setTagInput('') } }} style={{ padding: '8px 14px', borderRadius: '8px', background: '#a855f7', border: 'none', color: 'white', fontSize: '13px', cursor: 'pointer' }}>追加</button>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px' }}>背景</span>
+                {['#000000cc','#7c3aedcc','#1e40afcc','#065f46cc','#92400ecc','rgba(255,255,255,0.9)'].map(c => (
+                  <div key={c} onClick={() => setTagBg(c)} style={{ width: 22, height: 22, borderRadius: '4px', background: c, border: tagBg===c?'2px solid white':'1px solid rgba(255,255,255,0.2)', cursor: 'pointer' }} />
+                ))}
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginLeft: 4 }}>文字</span>
+                {['#ffffff','#f9fafb','#fbbf24','#34d399','#60a5fa','#111827'].map(c => (
+                  <div key={c} onClick={() => setTagColor(c)} style={{ width: 22, height: 22, borderRadius: '4px', background: c, border: tagColor===c?'2px solid #a855f7':'1px solid rgba(255,255,255,0.2)', cursor: 'pointer' }} />
+                ))}
+              </div>
+              {decorItems.filter(d => d.kind === 'tag').map(item => (
+                <span key={item.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: item.tagBg ?? '#000c', color: item.tagColor ?? '#fff', fontSize: '12px', padding: '3px 10px', borderRadius: '12px', marginRight: '6px', marginBottom: '6px' }}>
+                  {item.content}
+                  <button onClick={() => setDecorItems(p => p.filter(d => d.id !== item.id))} style={{ background: 'none', border: 'none', color: 'inherit', opacity: 0.7, cursor: 'pointer', fontSize: '12px', padding: 0 }}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Emoji tab */}
+          {editorTab === 'emoji' && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {EDITOR_EMOJIS.map(em => (
+                <button key={em} onClick={() => addDecorItem({ kind: 'emoji', content: em, x: 50+Math.random()*20-10, y: 30+Math.random()*20-10, size: 28 })} style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', fontSize: '22px', cursor: 'pointer' }}>{em}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+

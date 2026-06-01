@@ -113,6 +113,40 @@ const BG_COLOR: Record<Period, string> = {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+const DEFAULT_CHAT_CUSTOMIZE = {
+  bgColor: '#0f0f1a', myBubbleColor: '#7c3aed', otherBubbleColor: '#1e1e3a',
+  myTextColor: '#ffffff', otherTextColor: '#ffffff',
+}
+const DEFAULT_APPEARANCE_CUSTOMIZE = {
+  tabBgColor: '#0f0f1a', tabTextColor: '#ffffff', tabActiveColor: '#7c3aed',
+}
+const DEFAULT_NAVI_CUSTOMIZE = {
+  bgColor: '#1a1a2e', textColor: '#ffffff', activeColor: '#7c3aed',
+}
+const DEFAULT_PERIOD_CHAT_COLORS_CONST = {
+  bg:          { morning: '#1a2a4a', afternoon: '#2a3a5a', evening: '#1a1a3a', night: '#0f0f1a' },
+  myBubble:    { morning: '#2563eb', afternoon: '#7c3aed', evening: '#6d28d9', night: '#4c1d95' },
+  otherBubble: { morning: '#1e3a5f', afternoon: '#1e1e3a', evening: '#1a1a2e', night: '#0d0d1f' },
+  myText:      { morning: '#ffffff', afternoon: '#ffffff', evening: '#ffffff', night: '#ffffff' },
+  otherText:   { morning: '#ffffff', afternoon: '#ffffff', evening: '#ffffff', night: '#ffffff' },
+}
+const DEFAULT_CHAT_HUE = { bg: 240, myBubble: 270, otherBubble: 220, myText: 0, otherText: 0 }
+const DEFAULT_CHAT_LIGHTNESS = { bg: 10, myBubble: 50, otherBubble: 15, myText: 100, otherText: 100 }
+const DEFAULT_PERIOD_CHAT_HUE = {
+  bg:          { morning: 220, afternoon: 200, evening: 250, night: 240 },
+  myBubble:    { morning: 210, afternoon: 270, evening: 260, night: 270 },
+  otherBubble: { morning: 215, afternoon: 225, evening: 235, night: 240 },
+  myText:      { morning: 0,   afternoon: 0,   evening: 0,   night: 0   },
+  otherText:   { morning: 0,   afternoon: 0,   evening: 0,   night: 0   },
+}
+const DEFAULT_PERIOD_CHAT_LIGHTNESS = {
+  bg:          { morning: 25, afternoon: 25, evening: 15, night: 10 },
+  myBubble:    { morning: 50, afternoon: 50, evening: 45, night: 40 },
+  otherBubble: { morning: 20, afternoon: 15, evening: 12, night: 10 },
+  myText:      { morning: 100, afternoon: 100, evening: 100, night: 100 },
+  otherText:   { morning: 100, afternoon: 100, evening: 100, night: 100 },
+}
+
 const DEFAULT_AVATAR: AvatarConfig = {
   seed:                'myplace-user',
   skinColor:           'f9c9b6',
@@ -223,7 +257,7 @@ const ARC_RADIUS = 100
 const ARC_TABS = [
   { label: 'Profile',    index: 1, angle: -50 },
   { label: 'Museum',     index: 0, angle: 0   },
-  { label: 'Decoration', index: 2, angle: 50  },
+  { label: 'Setting', index: 2, angle: 50  },
 ]
 
 const CANVAS_FRAME: React.CSSProperties = {
@@ -248,6 +282,29 @@ export function MuseumView() {
   const [isTitleEditOpen, setIsTitleEditOpen] = useState(false)
   const [isBgEditOpen,    setIsBgEditOpen]    = useState(false)
   const [canvasBg,        setCanvasBg]        = useState<string>('default')
+  const [avatarChatBg,     setAvatarChatBg]     = useState<string | undefined>(undefined)
+  const [avatarChatBgMode, setAvatarChatBgMode] = useState<'color' | 'image' | 'virtual'>('color')
+  const [avatarChatBgImage, setAvatarChatBgImage] = useState<string | null>(null)
+  const [avatarChatAvatar, setAvatarChatAvatar] = useState<string | null>(null)
+  const [avatarBgHue, setAvatarBgHue] = useState(270)
+  const [avatarBgSaturation, setAvatarBgSaturation] = useState(60)
+  const [avatarBgLightness, setAvatarBgLightness] = useState(10)
+  const [avatarBgPaletteOpen, setAvatarBgPaletteOpen] = useState(false)
+  const AVATAR_BG_PALETTE: string[] = [
+    '#1a0800','#2d1000','#3d1a00','#4a2200','#5c2d00','#6b3a00','#7a4500','#8b5200','#ffffff','#f5f5f5',
+    '#3d0000','#5c0000','#7a0000','#8b0000','#a00000','#b22222','#cc3300','#e64400','#ff5500','#ff6600',
+    '#4a3d00','#665500','#7a6600','#998800','#b3a000','#ccb800','#e6d000','#ffe800','#ffff00','#ffff66',
+    '#003300','#004400','#005500','#006600','#007700','#008800','#009900','#00aa00','#00cc00','#00ff00',
+    '#003333','#004444','#005555','#006666','#007777','#008888','#00aaaa','#00cccc','#00eeee','#00ffff',
+    '#000033','#000055','#000077','#000099','#0000bb','#0000cc','#0000ee','#1111ff','#4444ff','#8888ff',
+    '#1a0033','#2d0055','#3d0077','#550099','#6600bb','#7700cc','#8800ee','#9900ff','#aa22ff','#bb44ff',
+    '#330011','#550022','#770033','#880044','#aa0055','#cc0066','#dd0077','#ee0088','#ff00aa','#ff44cc',
+    '#111111','#222222','#333333','#444444','#555555','#666666','#777777','#888888','#999999','#aaaaaa',
+    '#bbbbbb','#cccccc','#dddddd','#e5e5e5','#eeeeee','#f0f0f0','#f5f5f5','#fafafa','#ffffff','#ffffff',
+  ]
+  const AVATAR_BG_QUICK: string[] = ['#ff0000','#ff2200','#ffaa00','#ffff00','#00cc00','#00cccc','#0088ff','#0000ff','#6600ff']
+  const AVATAR_BG_RECOMMEND = ['#8B5E3C','#6B4423','#A0522D','#CD853F','#D2691E','#556B2F','#2F4F4F','#4A4A8A','#8B3A3A','#1C1C1C','#F5DEB3','#FAEBD7','#DEB887','#BC8F5F','#A9A9A9','#C0C0C0','#808080']
+  const avatarChatBgImageInputRef = useRef<HTMLInputElement>(null)
   const [bgHue,           setBgHue]           = useState(270)
   const [bgSaturation,    setBgSaturation]    = useState(60)
   const [bgLightness,     setBgLightness]     = useState(95)
@@ -273,6 +330,7 @@ export function MuseumView() {
   const [savedAvatars,       setSavedAvatars]       = useState<{ id: number; imageUrl: string }[]>([])
   const [activeProfileTab,   setActiveProfileTab]   = useState<'avatar' | 'collection' | 'memories'>('avatar')
   const [memoriesTab,        setMemoriesTab]        = useState<'museum' | 'chat'>('museum')
+  const [isDoorHallOpen,     setIsDoorHallOpen]     = useState(false)
   const [museumMemories,     setMuseumMemories]     = useState<{ id: number; date: string; snapshot: string }[]>([])
   const [displayName,           setDisplayName]           = useState('なつき')
   const [userId,                setUserId]                = useState('natsuki_346')
@@ -280,6 +338,12 @@ export function MuseumView() {
   const [identityTags,          setIdentityTags]          = useState(['#夜型', '#音楽好き', '#猫派', '#インドア'])
   const [subPage,               setSubPage]               = useState<'profile-edit' | 'tag-list' | 'connections' | null>(null)
   const [profileHeaderGradient, setProfileHeaderGradient] = useState('linear-gradient(155deg, #7c3aed 0%, #ec4899 100%)')
+  const [profileHeaderImage,   setProfileHeaderImage]   = useState<string | null>(null)
+  const [profileIconImage,     setProfileIconImage]     = useState<string | null>(null)
+  const [iconType,             setIconType]             = useState<'avatar' | 'photo'>('avatar')
+  const [selectedAvatarForIcon, setSelectedAvatarForIcon] = useState<string | null>(null)
+  const headerImageInputRef = useRef<HTMLInputElement>(null)
+  const iconImageInputRef   = useRef<HTMLInputElement>(null)
   const [fashionExpanded,       setFashionExpanded]       = useState(false)
   const [editName,              setEditName]              = useState('')
   const [editId,                setEditId]                = useState('')
@@ -294,6 +358,142 @@ export function MuseumView() {
   const [notifyStyle,  setNotifyStyle]  = useState<'star' | 'dot' | 'bell'>('star')
   const [decorSubPage, setDecorSubPage] = useState<DecorSubPage | null>(null)
   const [decoTab, setDecoTab] = useState<'general' | 'custom'>('general')
+  const [chatCustomize, setChatCustomize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chatCustomize')
+      return saved ? JSON.parse(saved) : { bgColor: '#0f0f1a', myBubbleColor: '#7c3aed', otherBubbleColor: '#1e1e3a', myTextColor: '#ffffff', otherTextColor: '#ffffff' }
+    } catch {
+      return { bgColor: '#0f0f1a', myBubbleColor: '#7c3aed', otherBubbleColor: '#1e1e3a', myTextColor: '#ffffff', otherTextColor: '#ffffff' }
+    }
+  })
+  const [chatSettingOpen, setChatSettingOpen] = useState(false)
+  const [openSubSection, setOpenSubSection] = useState<'bg' | 'bubble' | 'text' | null>(null)
+  const [chatBgSubOpen, setChatBgSubOpen] = useState(false)
+  const [avatarBgSubOpen, setAvatarBgSubOpen] = useState(false)
+  const [avatarBgChangeOpen, setAvatarBgChangeOpen] = useState(false)
+  const [avatarAvatarChangeOpen, setAvatarAvatarChangeOpen] = useState(false)
+  const [myBubbleSubOpen, setMyBubbleSubOpen] = useState(false)
+  const [theirBubbleSubOpen, setTheirBubbleSubOpen] = useState(false)
+  const [myTextSubOpen, setMyTextSubOpen] = useState(false)
+  const [theirTextSubOpen, setTheirTextSubOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState<'bg' | 'myBubble' | 'otherBubble' | 'myText' | 'otherText' | null>(null)
+  const [hue, setHue] = useState<{ bg: number; myBubble: number; otherBubble: number; myText: number; otherText: number }>({ bg: 240, myBubble: 270, otherBubble: 220, myText: 0, otherText: 0 })
+  const [lightness, setLightness] = useState<{ bg: number; myBubble: number; otherBubble: number; myText: number; otherText: number }>({ bg: 50, myBubble: 50, otherBubble: 50, myText: 90, otherText: 90 })
+  const [savedFeedback, setSavedFeedback] = useState<string | null>(null)
+  const [outerOpen, setOuterOpen] = useState(false)
+  const [naviOpen, setNaviOpen] = useState(false)
+  const [naviCustomize, setNaviCustomize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('naviCustomize')
+      return saved ? JSON.parse(saved) : { bgColor: '#1a1a2e', textColor: '#ffffff', activeColor: '#7c3aed' }
+    } catch { return { bgColor: '#1a1a2e', textColor: '#ffffff', activeColor: '#7c3aed' } }
+  })
+  const [appearanceCustomize, setAppearanceCustomize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('appearanceCustomize')
+      return saved ? JSON.parse(saved) : { tabBgColor: '#0f0f1a', tabTextColor: '#ffffff', tabActiveColor: '#7c3aed' }
+    } catch { return { tabBgColor: '#0f0f1a', tabTextColor: '#ffffff', tabActiveColor: '#7c3aed' } }
+  })
+  const [hueAppearance, setHueAppearance] = useState({ tabBg: 240, tabText: 0, tabActive: 270 })
+  const [lightnessAppearance, setLightnessAppearance] = useState({ tabBg: 10, tabText: 100, tabActive: 50 })
+  const [hueNavi, setHueNavi] = useState({ bg: 230, text: 0, active: 270 })
+  const [lightnessNavi, setLightnessNavi] = useState({ bg: 15, text: 100, active: 50 })
+  const [paletteOpenAppearance, setPaletteOpenAppearance] = useState<string | null>(null)
+  const [paletteOpenNavi, setPaletteOpenNavi] = useState<string | null>(null)
+  const [savedFeedbackAppearance, setSavedFeedbackAppearance] = useState<string | null>(null)
+  const [savedFeedbackNavi, setSavedFeedbackNavi] = useState<string | null>(null)
+  const [openSubAppearance, setOpenSubAppearance] = useState<string | null>(null)
+  const [openSubNavi, setOpenSubNavi] = useState<string | null>(null)
+  const [periodHours, setPeriodHours] = useState(() => {
+    try {
+      const saved = localStorage.getItem('periodHours')
+      return saved ? JSON.parse(saved) : { morning: { start: 6, end: 11 }, afternoon: { start: 11, end: 17 }, evening: { start: 17, end: 21 }, night: { start: 21, end: 6 } }
+    } catch { return { morning: { start: 6, end: 11 }, afternoon: { start: 11, end: 17 }, evening: { start: 17, end: 21 }, night: { start: 21, end: 6 } } }
+  })
+  const [periodSync, setPeriodSync] = useState(() => {
+    try {
+      const saved = localStorage.getItem('periodSync')
+      return saved ? JSON.parse(saved) : { chatBg: false, chatBubble: false, chatText: false, appearance: false, navi: false }
+    } catch { return { chatBg: false, chatBubble: false, chatText: false, appearance: false, navi: false } }
+  })
+  const [periodSettingOpen, setPeriodSettingOpen] = useState(false)
+  const [globalCardBgColor, setGlobalCardBgColor] = useState({ r: 255, g: 255, b: 255 })
+  const [globalCardTextColor, setGlobalCardTextColor] = useState({ r: 30, g: 30, b: 30 })
+  const [globalUseOwnCardColor, setGlobalUseOwnCardColor] = useState(true)
+  const [cardColorSectionOpen, setCardColorSectionOpen] = useState(false)
+  const [cardColorSavedFeedback, setCardColorSavedFeedback] = useState(false)
+  const [cardBgPaletteOpen, setCardBgPaletteOpen] = useState(false)
+  const [cardTextPaletteOpen, setCardTextPaletteOpen] = useState(false)
+
+  const CARD_PALETTE_DEFAULTS = [
+    '#8B5E3C','#6B4423','#A0522D','#CD853F','#D2691E',
+    '#556B2F','#2F4F4F','#4A4A8A','#8B3A3A','#1C1C1C',
+    '#F5DEB3','#FAEBD7','#DEB887','#BC8F5F','#A9A9A9',
+    '#C0C0C0','#808080',
+  ]
+  const CARD_PALETTE_COLORS = [
+    ['#1a0000','#330000','#660000','#990000','#cc0000','#ff0000','#ff4d4d','#ff9999','#ffcccc','#fff0f0'],
+    ['#1a0d00','#331a00','#663300','#994d00','#cc6600','#ff8000','#ffaa4d','#ffcc99','#ffe5cc','#fff5e6'],
+    ['#1a1a00','#333300','#666600','#999900','#cccc00','#ffff00','#ffff4d','#ffff99','#ffffcc','#fffff0'],
+    ['#001a00','#003300','#006600','#009900','#00cc00','#00ff00','#4dff4d','#99ff99','#ccffcc','#f0fff0'],
+    ['#00001a','#000033','#000066','#000099','#0000cc','#0000ff','#4d4dff','#9999ff','#ccccff','#f0f0ff'],
+    ['#0d001a','#1a0033','#330066','#4d0099','#6600cc','#8000ff','#aa4dff','#cc99ff','#e5ccff','#f5e6ff'],
+    ['#0a0a0a','#1a1a1a','#333333','#4d4d4d','#666666','#808080','#999999','#b3b3b3','#cccccc','#e6e6e6'],
+    ['#ffffff','#f5f5f5','#ebebeb','#e0e0e0','#d6d6d6','#cccccc','#c2c2c2','#b8b8b8','#adadad','#a3a3a3'],
+  ]
+  const [openSubPeriod, setOpenSubPeriod] = useState<'morning' | 'afternoon' | 'evening' | 'night' | null>(null)
+  const [savedFeedbackPeriod, setSavedFeedbackPeriod] = useState(false)
+  const [openPeriodColorKey, setOpenPeriodColorKey] = useState<string | null>(null)
+  const [paletteOpenPeriod, setPaletteOpenPeriod] = useState<string | null>(null)
+
+  type PeriodNumbers = Record<'morning' | 'afternoon' | 'evening' | 'night', number>
+  const [periodChatHue, setPeriodChatHue] = useState<{ bg: PeriodNumbers; myBubble: PeriodNumbers; otherBubble: PeriodNumbers; myText: PeriodNumbers; otherText: PeriodNumbers }>({
+    bg:          { morning: 220, afternoon: 200, evening: 250, night: 240 },
+    myBubble:    { morning: 210, afternoon: 270, evening: 260, night: 270 },
+    otherBubble: { morning: 215, afternoon: 225, evening: 235, night: 240 },
+    myText:      { morning: 0, afternoon: 0, evening: 0, night: 0 },
+    otherText:   { morning: 0, afternoon: 0, evening: 0, night: 0 },
+  })
+  const [periodChatLightness, setPeriodChatLightness] = useState<{ bg: PeriodNumbers; myBubble: PeriodNumbers; otherBubble: PeriodNumbers; myText: PeriodNumbers; otherText: PeriodNumbers }>({
+    bg:          { morning: 25, afternoon: 25, evening: 15, night: 10 },
+    myBubble:    { morning: 50, afternoon: 50, evening: 45, night: 40 },
+    otherBubble: { morning: 20, afternoon: 15, evening: 12, night: 10 },
+    myText:      { morning: 100, afternoon: 100, evening: 100, night: 100 },
+    otherText:   { morning: 100, afternoon: 100, evening: 100, night: 100 },
+  })
+
+  type PeriodColors = Record<'morning' | 'afternoon' | 'evening' | 'night', string>
+  const DEFAULT_PERIOD_CHAT_COLORS = DEFAULT_PERIOD_CHAT_COLORS_CONST as {
+    bg: PeriodColors; myBubble: PeriodColors; otherBubble: PeriodColors; myText: PeriodColors; otherText: PeriodColors
+  }
+  const [periodChatColors, setPeriodChatColors] = useState<typeof DEFAULT_PERIOD_CHAT_COLORS>(() => {
+    try {
+      const saved = localStorage.getItem('periodChatColors')
+      return saved ? JSON.parse(saved) : DEFAULT_PERIOD_CHAT_COLORS
+    } catch { return DEFAULT_PERIOD_CHAT_COLORS }
+  })
+  const DEFAULT_PERIOD_APPEARANCE_COLORS = {
+    tabBg:     { morning: '#e0f2fe', afternoon: '#dbeafe', evening: '#ffedd5', night: '#0f0f1a' } as PeriodColors,
+    tabText:   { morning: '#0f172a', afternoon: '#1e3a5f', evening: '#431407', night: '#ffffff' } as PeriodColors,
+    tabActive: { morning: '#0284c7', afternoon: '#2563eb', evening: '#ea580c', night: '#a78bfa' } as PeriodColors,
+  }
+  const [periodAppearanceColors, setPeriodAppearanceColors] = useState<typeof DEFAULT_PERIOD_APPEARANCE_COLORS>(() => {
+    try {
+      const saved = localStorage.getItem('periodAppearanceColors')
+      return saved ? JSON.parse(saved) : DEFAULT_PERIOD_APPEARANCE_COLORS
+    } catch { return DEFAULT_PERIOD_APPEARANCE_COLORS }
+  })
+  const DEFAULT_PERIOD_NAVI_COLORS = {
+    bg:     { morning: '#ffffff', afternoon: '#eff6ff', evening: '#fff7ed', night: '#1a1a2e' } as PeriodColors,
+    text:   { morning: '#64748b', afternoon: '#64748b', evening: '#92400e', night: '#9ca3af' } as PeriodColors,
+    active: { morning: '#0284c7', afternoon: '#2563eb', evening: '#ea580c', night: '#a78bfa' } as PeriodColors,
+  }
+  const [periodNaviColors, setPeriodNaviColors] = useState<typeof DEFAULT_PERIOD_NAVI_COLORS>(() => {
+    try {
+      const saved = localStorage.getItem('periodNaviColors')
+      return saved ? JSON.parse(saved) : DEFAULT_PERIOD_NAVI_COLORS
+    } catch { return DEFAULT_PERIOD_NAVI_COLORS }
+  })
 
   const { setView, setSubPageOpen } = useWorldStore()
   const { gender, setGender } = useProfileStore()
@@ -317,15 +517,28 @@ export function MuseumView() {
   }, [subPage, setSubPageOpen])
 
   useEffect(() => {
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [])
+
+  const getCurrentPeriod = (h: number): Period => {
+    if (h >= periodHours.morning.start && h < periodHours.morning.end) return 'morning'
+    if (h >= periodHours.afternoon.start && h < periodHours.afternoon.end) return 'afternoon'
+    if (h >= periodHours.evening.start && h < periodHours.evening.end) return 'evening'
+    return 'night'
+  }
+
+  useEffect(() => {
     const update = () => {
       const h = new Date().getHours()
       setHour(h)
-      setPeriod(getPeriod(h))
+      setPeriod(getCurrentPeriod(h))
     }
     update()
     const id = setInterval(update, 60_000)
     return () => clearInterval(id)
-  }, [])
+  }, [periodHours]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const h = new Date().getHours()
@@ -514,6 +727,44 @@ export function MuseumView() {
 
   return (
     <div className="relative flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
+      <style>{`
+        .hue-slider {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 100%;
+          height: 12px;
+          border-radius: 6px;
+          outline: none;
+          cursor: pointer;
+          background: linear-gradient(to right,
+            hsl(0,80%,55%), hsl(30,80%,55%), hsl(60,80%,55%),
+            hsl(90,80%,55%), hsl(120,80%,55%), hsl(150,80%,55%),
+            hsl(180,80%,55%), hsl(210,80%,55%), hsl(240,80%,55%),
+            hsl(270,80%,55%), hsl(300,80%,55%), hsl(330,80%,55%),
+            hsl(360,80%,55%)
+          );
+        }
+        .hue-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: white;
+          border: 3px solid rgba(0,0,0,0.4);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+          cursor: pointer;
+        }
+        .hue-slider::-moz-range-thumb {
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: white;
+          border: 3px solid rgba(0,0,0,0.4);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+          cursor: pointer;
+        }
+      `}</style>
       <SkyLayer hour={hour} />
 
       {/* ── Arc tab + content wrapper ────────────────────────────── */}
@@ -688,7 +939,7 @@ export function MuseumView() {
         overflow: 'hidden',
       }}>
         <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none', overflowY: 'auto', paddingBottom: '80px' }}>
-          <div style={{ height: '120px', background: profileHeaderGradient, position: 'relative', flexShrink: 0 }}>
+          <div style={{ height: '120px', backgroundImage: profileHeaderImage ? `url(${profileHeaderImage})` : profileHeaderGradient, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', flexShrink: 0 }}>
             <button onClick={() => openSubPage('profile-edit')} style={{
               position: 'absolute', top: '14px', right: '16px',
               fontSize: '12px', color: 'rgba(255,255,255,0.9)',
@@ -697,8 +948,13 @@ export function MuseumView() {
             }}>編集</button>
           </div>
           <div style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', top: '-36px', left: '16px' }}>
-              <ProfileAvatar config={avatarConfig} />
+            <div style={{ position: 'absolute', top: '-36px', left: '16px', cursor: 'pointer' }} onClick={() => openSubPage('profile-edit')}>
+              {iconType === 'photo' && profileIconImage
+                ? <img src={profileIconImage} style={{ width: '72px', height: '72px', borderRadius: '50%', objectFit: 'cover', border: '3px solid rgba(255,255,255,0.2)' }} alt="icon" />
+                : iconType === 'avatar' && selectedAvatarForIcon
+                  ? <img src={selectedAvatarForIcon} style={{ width: '72px', height: '72px', borderRadius: '50%', objectFit: 'cover', objectPosition: 'top', border: '3px solid rgba(255,255,255,0.2)' }} alt="icon" />
+                  : <ProfileAvatar config={avatarConfig} />
+              }
             </div>
             <div style={{ height: '44px' }} />
             <div style={{ padding: '0 16px 14px' }}>
@@ -892,6 +1148,18 @@ export function MuseumView() {
                       </p>
                     </div>
                   </div>
+                  <div style={{ marginTop: '16px', borderRadius: '16px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                    <div
+                      onClick={() => setIsDoorHallOpen(true)}
+                      style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px' }}>🚪</span>
+                        <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>図鑑</span>
+                      </div>
+                      <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '18px' }}>›</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -966,6 +1234,7 @@ export function MuseumView() {
         opacity: activeIndex === 2 ? 1 : 0,
         transition: 'transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s ease',
         pointerEvents: activeIndex === 2 ? 'auto' : 'none',
+        display: 'flex', flexDirection: 'column',
       }}>
 
         {/* ── タブ切り替え ─────────────────────────────────────────── */}
@@ -996,33 +1265,7 @@ export function MuseumView() {
 
         {/* ── 一般タブ ─────────────────────────────────────────────── */}
         {decoTab === 'general' && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', scrollbarWidth: 'none' }}>
-
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>外観</p>
-            <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer' }}
-                onClick={() => setDecorSubPage('wallpaper')}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '18px' }}>🖼️</span>
-                  <span style={{ color: 'white', fontSize: '14px' }}>壁紙</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>{wallpaper === null ? '時間連動' : '固定'}</span>
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>›</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer' }}
-                onClick={() => setDecorSubPage('theme')}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '18px' }}>🎨</span>
-                  <span style={{ color: 'white', fontSize: '14px' }}>テーマカラー</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: themeColor }} />
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>›</span>
-                </div>
-              </div>
-            </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: '120px', scrollbarWidth: 'none' }}>
 
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>通知</p>
             <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
@@ -1044,32 +1287,6 @@ export function MuseumView() {
                 </div>
                 <div style={{ width: '44px', height: '26px', borderRadius: '13px', background: '#a78bfa', position: 'relative', cursor: 'pointer' }}>
                   <div style={{ position: 'absolute', top: '3px', left: '21px', width: '20px', height: '20px', borderRadius: '50%', background: 'white' }} />
-                </div>
-              </div>
-            </div>
-
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>Museum</p>
-            <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer' }}
-                onClick={() => setDecorSubPage('emoji')}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '18px' }}>🎭</span>
-                  <span style={{ color: 'white', fontSize: '14px' }}>Museum編集ボタン絵文字</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '16px' }}>{editBtnEmoji}</span>
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>›</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer' }}
-                onClick={() => setDecorSubPage('zukan')}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '18px' }}>🚪</span>
-                  <span style={{ color: 'white', fontSize: '14px' }}>ドアのアレンジ</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>図鑑から</span>
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>›</span>
                 </div>
               </div>
             </div>
@@ -1108,16 +1325,1144 @@ export function MuseumView() {
 
         {/* ── カスタマイズタブ ──────────────────────────────────────── */}
         {decoTab === 'custom' && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', scrollbarWidth: 'none' }}>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 600, margin: '0 0 8px 4px', letterSpacing: '0.8px' }}>カスタマイズ</p>
-            <div style={{ borderRadius: '14px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden', marginBottom: '20px' }}>
-              <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '32px', opacity: 0.4 }}>✨</span>
-                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', margin: 0, textAlign: 'center' }}>
-                  カスタマイズ機能は近日公開予定です
-                </p>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: '120px', scrollbarWidth: 'none' }}>
+
+            {/* チャット設定 親折りたたみ */}
+            <div style={{ borderRadius: '12px', background: 'rgba(255,255,255,0.05)', marginBottom: '8px', overflow: 'hidden' }}>
+              {/* 親ヘッダー */}
+              <div
+                onClick={() => setChatSettingOpen(p => !p)}
+                style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', cursor: 'pointer' }}
+              >
+                <span style={{ color: 'white', fontSize: '14px', fontWeight: 600 }}>💬 チャット設定</span>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>{chatSettingOpen ? '▼' : '▶'}</span>
               </div>
+
+              {chatSettingOpen && (
+                <div style={{ padding: '0 12px 12px' }}>
+
+                  {(() => {
+                    const THEME_COLORS = [
+                      ['#1a0000','#330000','#660000','#990000','#cc0000','#ff0000','#ff4d4d','#ff9999','#ffcccc','#fff0f0'],
+                      ['#1a0d00','#331a00','#663300','#994d00','#cc6600','#ff8000','#ffaa4d','#ffcc99','#ffe5cc','#fff5e6'],
+                      ['#1a1a00','#333300','#666600','#999900','#cccc00','#ffff00','#ffff4d','#ffff99','#ffffcc','#fffff0'],
+                      ['#001a00','#003300','#006600','#009900','#00cc00','#00ff00','#4dff4d','#99ff99','#ccffcc','#f0fff0'],
+                      ['#001a1a','#003333','#006666','#009999','#00cccc','#00ffff','#4dffff','#99ffff','#ccffff','#f0ffff'],
+                      ['#00001a','#000033','#000066','#000099','#0000cc','#0000ff','#4d4dff','#9999ff','#ccccff','#f0f0ff'],
+                      ['#0d001a','#1a0033','#330066','#4d0099','#6600cc','#8000ff','#aa4dff','#cc99ff','#e5ccff','#f5e6ff'],
+                      ['#1a0011','#330022','#660044','#990066','#cc0088','#ff00aa','#ff4dc4','#ff99dd','#ffcced','#fff0f8'],
+                      ['#0a0a0a','#1a1a1a','#333333','#4d4d4d','#666666','#808080','#999999','#b3b3b3','#cccccc','#e6e6e6'],
+                      ['#ffffff','#f5f5f5','#ebebeb','#e0e0e0','#d6d6d6','#cccccc','#c2c2c2','#b8b8b8','#adadad','#a3a3a3'],
+                    ]
+                    const STANDARD_COLORS = ['#c00000','#ff0000','#ffc000','#ffff00','#92d050','#00b050','#00b0f0','#0070c0','#002060','#7030a0']
+
+                    const handleSave = (section: 'bg' | 'bubble' | 'text') => {
+                      try {
+                        localStorage.setItem('chatCustomize', JSON.stringify(chatCustomize))
+                        localStorage.setItem('periodChatColors', JSON.stringify(periodChatColors))
+                        setSavedFeedback(section)
+                        setTimeout(() => setSavedFeedback(null), 1500)
+                      } catch (e) {
+                        console.error('save failed', e)
+                      }
+                    }
+                    const PERIODS: Array<'morning' | 'afternoon' | 'evening' | 'night'> = ['morning', 'afternoon', 'evening', 'night']
+
+                    type ColorKey = 'bg' | 'myBubble' | 'otherBubble' | 'myText' | 'otherText'
+                    const colorKeyMap: Record<ColorKey, string> = {
+                      bg: 'bgColor', myBubble: 'myBubbleColor', otherBubble: 'otherBubbleColor',
+                      myText: 'myTextColor', otherText: 'otherTextColor',
+                    }
+
+                    const applyColor = (paletteKey: ColorKey, color: string) => {
+                      const prop = colorKeyMap[paletteKey]
+                      setChatCustomize((p: typeof chatCustomize) => ({ ...p, [prop]: color }))
+                    }
+
+                    const handleHueChange = (key: ColorKey, val: number) => {
+                      setHue(prev => ({ ...prev, [key]: val }))
+                      const l = lightness[key]
+                      const color = `hsl(${val}, 70%, ${l}%)`
+                      setChatCustomize((prev: typeof chatCustomize) => ({ ...prev, [colorKeyMap[key]]: color }))
+                    }
+
+                    const handleLightnessChange = (key: ColorKey, val: number) => {
+                      setLightness(prev => ({ ...prev, [key]: val }))
+                      const h = hue[key]
+                      const color = `hsl(${h}, 70%, ${val}%)`
+                      setChatCustomize((prev: typeof chatCustomize) => ({ ...prev, [colorKeyMap[key]]: color }))
+                    }
+
+                    const renderSliderRow = (colorKey: ColorKey, currentColor: string, paletteKey: ColorKey) => {
+                      const currentHue = hue[colorKey]
+                      const currentL = lightness[colorKey]
+                      const hslColor = `hsl(${currentHue}, 70%, ${currentL}%)`
+                      return (
+                        <div style={{ marginBottom: '10px' }} key={paletteKey}>
+                          {/* Hueスライダー行 */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: hslColor, flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)' }} />
+                            <div style={{ flex: 1 }}>
+                              <input
+                                className="hue-slider"
+                                type="range" min={0} max={360} value={currentHue}
+                                onChange={e => handleHueChange(colorKey, Number(e.target.value))}
+                                onInput={e => handleHueChange(colorKey, Number((e.target as HTMLInputElement).value))}
+                                style={{ width: '100%', pointerEvents: 'auto' }}
+                              />
+                            </div>
+                            <button
+                              onClick={() => setPaletteOpen(p => p === paletteKey ? null : paletteKey)}
+                              style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                            >🎨</button>
+                          </div>
+                          {/* 明度スライダー */}
+                          <div style={{ paddingLeft: '40px', paddingRight: '40px', marginBottom: '6px' }}>
+                            <input
+                              type="range" min={10} max={90} value={currentL}
+                              className="hue-slider"
+                              style={{ background: `linear-gradient(to right, hsl(${currentHue},70%,10%), hsl(${currentHue},70%,50%), hsl(${currentHue},70%,90%))`, width: '100%', pointerEvents: 'auto' }}
+                              onChange={e => handleLightnessChange(colorKey, Number(e.target.value))}
+                              onInput={e => handleLightnessChange(colorKey, Number((e.target as HTMLInputElement).value))}
+                            />
+                          </div>
+                          {/* パレット */}
+                          {paletteOpen === paletteKey && (
+                            <>
+                              <div
+                                onClick={() => setPaletteOpen(null)}
+                                style={{ position: 'fixed', inset: 0, zIndex: 0 }}
+                              />
+                              <div style={{ position: 'relative', zIndex: 1, backgroundColor: 'rgba(20,20,40,0.97)', borderRadius: 12, padding: 8, marginTop: 8, width: '100%', overflowX: 'hidden' }}>
+                                <div style={{ display: 'flex', gap: '2px', marginBottom: '8px', flexWrap: 'wrap', width: '100%' }}>
+                                  {THEME_COLORS.map((col, ci) => (
+                                    <div key={ci} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                      {col.map((c, ri) => (
+                                        <button
+                                          key={ri}
+                                          onClick={() => applyColor(paletteKey, c)}
+                                          style={{ width: 22, height: 16, borderRadius: 2, background: c, border: currentColor === c ? '2px solid white' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }}
+                                        />
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                  {STANDARD_COLORS.map(c => (
+                                    <button
+                                      key={c}
+                                      onClick={() => applyColor(paletteKey, c)}
+                                      style={{ width: 22, height: 22, borderRadius: '50%', background: c, border: currentColor === c ? '2px solid white' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <>
+                        {/* 背景 サブ折りたたみ */}
+                        <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '8px', overflow: 'hidden' }}>
+                          <div onClick={() => setOpenSubSection(p => p === 'bg' ? null : 'bg')} style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🖼️ 背景</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubSection === 'bg' ? '▼' : '▶'}</span>
+                          </div>
+                          {openSubSection === 'bg' && (
+                            <div style={{ padding: '8px 0' }}>
+
+                              {/* サブセクション1: チャット背景 */}
+                              <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                <div onClick={() => setChatBgSubOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: 'pointer' }}>
+                                  <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>💬 チャット背景</span>
+                                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>{chatBgSubOpen ? '▼' : '▶'}</span>
+                                </div>
+                                {chatBgSubOpen && (
+                                  <div style={{ padding: '0 16px 16px' }}>
+                                    <div style={{ height: '80px', borderRadius: '8px', background: chatCustomize.bgColor, marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                      <div style={{ background: chatCustomize.otherBubbleColor, borderRadius: '4px 12px 12px 12px', padding: '6px 10px' }}>
+                                        <p style={{ color: chatCustomize.otherTextColor, fontSize: '11px', margin: 0 }}>こんにちは</p>
+                                      </div>
+                                      <div style={{ background: chatCustomize.myBubbleColor, borderRadius: '12px 4px 12px 12px', padding: '6px 10px' }}>
+                                        <p style={{ color: chatCustomize.myTextColor, fontSize: '11px', margin: 0 }}>よろしく！</p>
+                                      </div>
+                                    </div>
+                                    {renderSliderRow('bg', chatCustomize.bgColor, 'bg')}
+                                    {periodSync.chatBg && (
+                                      <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 8 }}>⏰ 時間帯別設定</div>
+                                        {PERIODS.map(p => <PeriodColorPicker key={p} label="chatBg" colorKey={p}
+                                          colors={periodChatColors.bg} setColors={c => setPeriodChatColors(prev => ({ ...prev, bg: c(prev.bg) as typeof prev.bg }))}
+                                          hues={periodChatHue.bg} setHues={c => setPeriodChatHue(prev => ({ ...prev, bg: c(prev.bg) as typeof prev.bg }))}
+                                          lightnesses={periodChatLightness.bg} setLightnesses={c => setPeriodChatLightness(prev => ({ ...prev, bg: c(prev.bg) as typeof prev.bg }))}
+                                          openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey}
+                                          paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod}
+                                          previewBg={periodChatColors.bg[p]} previewMyBubble={periodChatColors.myBubble[p]} previewOtherBubble={periodChatColors.otherBubble[p]} previewMyText={periodChatColors.myText[p]} previewOtherText={periodChatColors.otherText[p]}
+                                        />)}
+                                      </div>
+                                    )}
+                                    <button onClick={() => { setChatCustomize(DEFAULT_CHAT_CUSTOMIZE); setHue(DEFAULT_CHAT_HUE); setLightness(DEFAULT_CHAT_LIGHTNESS) }} style={{ width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 6, marginTop: 8, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer' }}>⟳ デフォルトに戻す</button>
+                                    <button onClick={() => handleSave('bg')} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                                      {savedFeedback === 'bg' ? '保存しました ✓' : '保存する'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* サブセクション2: アバターチャット背景 */}
+                              <div>
+                                <div onClick={() => setAvatarBgSubOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: 'pointer' }}>
+                                  <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🧍 アバターチャット背景</span>
+                                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>{avatarBgSubOpen ? '▼' : '▶'}</span>
+                                </div>
+                                {avatarBgSubOpen && (
+                                  <div style={{ padding: '0 16px 12px' }}>
+                                    {/* プレビュー */}
+                                    {(() => {
+                                      const currentAvatarBgPreview =
+                                        avatarChatBgMode === 'color' ? `hsl(${avatarBgHue},${avatarBgSaturation}%,${avatarBgLightness}%)`
+                                        : avatarChatBgMode === 'image' && avatarChatBgImage ? `url(${avatarChatBgImage})`
+                                        : avatarChatBg ?? '#0f0a1e'
+                                      const displayAvatar = avatarChatAvatar ?? (savedAvatars.length > 0 ? savedAvatars[0].imageUrl : null)
+                                      return (
+                                        <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', height: '140px', marginBottom: '10px', background: avatarChatBg ?? '#0f0a1e' }}>
+                                          <div style={{ position: 'absolute', inset: 0, background: currentAvatarBgPreview, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                                          <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '70px', height: '100px' }}>
+                                            {displayAvatar ? <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} alt="avatar" /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px' }}>👤</div>}
+                                          </div>
+                                        </div>
+                                      )
+                                    })()}
+                                    {/* 🎨 背景を変える */}
+                                    <div onClick={() => setAvatarBgChangeOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer' }}>
+                                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600 }}>🎨 背景を変える</span>
+                                      <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>{avatarBgChangeOpen ? '▼' : '▶'}</span>
+                                    </div>
+                                    {avatarBgChangeOpen && (
+                                      <div style={{ paddingBottom: 8 }}>
+                                        <div style={{ display: 'flex', gap: '4px', marginBottom: 10 }}>
+                                          {(['color', 'image', 'virtual'] as const).map(m => (
+                                            <button key={m} onClick={() => setAvatarChatBgMode(m)} style={{ flex: 1, padding: '6px 2px', borderRadius: 8, background: avatarChatBgMode === m ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.05)', border: avatarChatBgMode === m ? '1px solid rgba(167,139,250,0.4)' : '1px solid rgba(255,255,255,0.1)', color: avatarChatBgMode === m ? '#c4b5fd' : 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                                              {m === 'color' ? '🎨 カラー' : m === 'image' ? '🖼️ 画像' : '✨ バーチャル'}
+                                            </button>
+                                          ))}
+                                        </div>
+                                        {avatarChatBgMode === 'color' && (() => {
+                                          const applyHex = (c: string) => { const r=parseInt(c.slice(1,3),16)/255,g=parseInt(c.slice(3,5),16)/255,b=parseInt(c.slice(5,7),16)/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2,d=mx-mn; setAvatarBgLightness(Math.round(l*95)); if(d<0.001){setAvatarBgHue(0);setAvatarBgSaturation(0)}else{const s=l>0.5?d/(2-mx-mn):d/(mx+mn),h=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;setAvatarBgHue(Math.round(h/6*360));setAvatarBgSaturation(Math.round(s*100))} }
+                                          return (
+                                          <div>
+                                            <div style={{ height: 28, borderRadius: 8, background: `hsl(${avatarBgHue},${avatarBgSaturation}%,${avatarBgLightness}%)`, marginBottom: 8, border: '1px solid rgba(255,255,255,0.1)' }} />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                              <div style={{ flex: 1, position: 'relative', height: '20px' }}>
+                                                <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '6px', transform: 'translateY(-50%)', borderRadius: '3px', background: 'linear-gradient(to right, hsl(0,80%,55%), hsl(60,80%,55%), hsl(120,80%,55%), hsl(180,80%,55%), hsl(240,80%,55%), hsl(300,80%,55%), hsl(360,80%,55%))', pointerEvents: 'none' }} />
+                                                <input type="range" min={0} max={360} value={avatarBgHue} style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'pointer', margin: 0 }} onChange={e => setAvatarBgHue(Number(e.target.value))} onInput={e => setAvatarBgHue(Number((e.target as HTMLInputElement).value))} />
+                                                <div style={{ position: 'absolute', top: '50%', left: `calc(${avatarBgHue / 360 * 100}% - 8px)`, transform: 'translateY(-50%)', width: 16, height: 16, borderRadius: '50%', background: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.5)', pointerEvents: 'none' }} />
+                                              </div>
+                                              <button onClick={() => setAvatarBgPaletteOpen(p => !p)} style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0 }}>🎨</button>
+                                            </div>
+                                            <div style={{ position: 'relative', height: '20px', marginBottom: 6 }}>
+                                              <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '6px', transform: 'translateY(-50%)', borderRadius: '3px', background: `linear-gradient(to right, hsl(${avatarBgHue},0%,${avatarBgLightness}%), hsl(${avatarBgHue},100%,${avatarBgLightness}%))`, pointerEvents: 'none' }} />
+                                              <input type="range" min={0} max={100} value={avatarBgSaturation} style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'pointer', margin: 0 }} onChange={e => setAvatarBgSaturation(Number(e.target.value))} onInput={e => setAvatarBgSaturation(Number((e.target as HTMLInputElement).value))} />
+                                              <div style={{ position: 'absolute', top: '50%', left: `calc(${avatarBgSaturation / 100 * 100}% - 8px)`, transform: 'translateY(-50%)', width: 16, height: 16, borderRadius: '50%', background: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.5)', pointerEvents: 'none' }} />
+                                            </div>
+                                            <div style={{ position: 'relative', height: '20px', marginBottom: 6 }}>
+                                              <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '6px', transform: 'translateY(-50%)', borderRadius: '3px', background: `linear-gradient(to right, hsl(${avatarBgHue},${avatarBgSaturation}%,5%), hsl(${avatarBgHue},${avatarBgSaturation}%,50%), hsl(${avatarBgHue},${avatarBgSaturation}%,95%))`, pointerEvents: 'none' }} />
+                                              <input type="range" min={0} max={95} value={avatarBgLightness} style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'pointer', margin: 0 }} onChange={e => setAvatarBgLightness(Number(e.target.value))} onInput={e => setAvatarBgLightness(Number((e.target as HTMLInputElement).value))} />
+                                              <div style={{ position: 'absolute', top: '50%', left: `calc(${avatarBgLightness / 95 * 100}% - 8px)`, transform: 'translateY(-50%)', width: 16, height: 16, borderRadius: '50%', background: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.5)', pointerEvents: 'none' }} />
+                                            </div>
+                                            {avatarBgPaletteOpen && (
+                                              <>
+                                                <div onClick={() => setAvatarBgPaletteOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 0 }} />
+                                                <div style={{ position: 'relative', zIndex: 1, marginTop: 8, padding: 10, borderRadius: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, margin: '0 0 4px' }}>おすすめ</p>
+                                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                                                    {AVATAR_BG_RECOMMEND.map(c => <button key={c} onClick={() => applyHex(c)} style={{ width: 20, height: 20, borderRadius: 4, background: c, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />)}
+                                                  </div>
+                                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 2, marginBottom: 8 }}>
+                                                    {AVATAR_BG_PALETTE.map((c, i) => <button key={i} onClick={() => applyHex(c)} style={{ width: '100%', aspectRatio: '1', borderRadius: '2px', background: c, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', padding: 0 }} />)}
+                                                  </div>
+                                                  <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                                    {AVATAR_BG_QUICK.map(c => <button key={c} onClick={() => applyHex(c)} style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />)}
+                                                  </div>
+                                                </div>
+                                              </>
+                                            )}
+                                          </div>
+                                          )
+                                        })()}
+                                        {avatarChatBgMode === 'image' && (
+                                          <div>
+                                            <input ref={avatarChatBgImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setAvatarChatBgImage(URL.createObjectURL(f)) }} />
+                                            <button onClick={() => avatarChatBgImageInputRef.current?.click()} style={{ width: '100%', padding: '10px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px dashed rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>📷 写真をアップロード</button>
+                                            {avatarChatBgImage && (
+                                              <div style={{ position: 'relative', marginBottom: 8 }}>
+                                                <img src={avatarChatBgImage} style={{ width: '100%', height: 60, objectFit: 'cover', borderRadius: 8, display: 'block' }} alt="bg" />
+                                                <button onClick={() => setAvatarChatBgImage(null)} style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: 'none', color: 'white', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                        {avatarChatBgMode === 'virtual' && (() => {
+                                          const VIRTUAL_BGSETS = [
+                                            { label: '宇宙',    gradient: 'linear-gradient(135deg, #0d0221, #1a0533, #0d1b4b)' },
+                                            { label: '夜の街',  gradient: 'linear-gradient(180deg, #0a0a2e 0%, #1a1040 50%, #0d0a1e 100%)' },
+                                            { label: 'オーロラ',gradient: 'linear-gradient(135deg, #0d4f3c, #1a2a4a, #3d1a5c)' },
+                                            { label: '夕焼け',  gradient: 'linear-gradient(135deg, #ff6b35, #f7931e, #ffcd3c)' },
+                                            { label: '深海',    gradient: 'linear-gradient(180deg, #001233, #023e8a, #0077b6)' },
+                                            { label: '桜',      gradient: 'linear-gradient(135deg, #ffecd2, #fcb69f, #ff9a9e)' },
+                                          ]
+                                          return (
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: 8 }}>
+                                              {VIRTUAL_BGSETS.map(bg => (
+                                                <button key={bg.label} onClick={() => setAvatarChatBg(bg.gradient)} style={{ width: 64, height: 64, borderRadius: 10, background: bg.gradient, border: avatarChatBg === bg.gradient ? '2px solid #a78bfa' : '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', position: 'relative', flexShrink: 0, padding: 0 }}>
+                                                  <span style={{ position: 'absolute', bottom: 3, left: 0, right: 0, textAlign: 'center', fontSize: 9, color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>{bg.label}</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )
+                                        })()}
+                                        <button onClick={() => { if (avatarChatBgMode === 'color') setAvatarChatBg(`hsl(${avatarBgHue},${avatarBgSaturation}%,${avatarBgLightness}%)`); else if (avatarChatBgMode === 'image') setAvatarChatBg(avatarChatBgImage ?? undefined) }} style={{ width: '100%', padding: '9px 0', borderRadius: 8, background: '#7c3aed', border: 'none', color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                          この背景を適用する
+                                        </button>
+                                      </div>
+                                    )}
+                                    {/* 👤 アバターを変える */}
+                                    <div onClick={() => setAvatarAvatarChangeOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer' }}>
+                                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600 }}>👤 アバターを変える</span>
+                                      <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>{avatarAvatarChangeOpen ? '▼' : '▶'}</span>
+                                    </div>
+                                    {avatarAvatarChangeOpen && (
+                                      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 4, paddingTop: 6 }}>
+                                        <div onClick={() => setAvatarChatAvatar(null)} style={{ flexShrink: 0, width: '52px', height: '72px', borderRadius: '10px', border: avatarChatAvatar === null ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', cursor: 'pointer' }}>👤</div>
+                                        {savedAvatars.map(av => (
+                                          <div key={av.id} onClick={() => setAvatarChatAvatar(av.imageUrl)} style={{ flexShrink: 0, width: '52px', height: '72px', borderRadius: '10px', border: avatarChatAvatar === av.imageUrl ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.1)', overflow: 'hidden', cursor: 'pointer' }}>
+                                            <img src={av.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} alt="avatar" />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 吹き出し サブ折りたたみ */}
+                        <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '8px', overflow: 'hidden' }}>
+                          <div onClick={() => setOpenSubSection(p => p === 'bubble' ? null : 'bubble')} style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>💬 吹き出し</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubSection === 'bubble' ? '▼' : '▶'}</span>
+                          </div>
+                          {openSubSection === 'bubble' && (
+                            <div style={{ padding: '8px 0' }}>
+
+                              {/* プレビュー */}
+                              <div style={{ padding: '0 16px 12px' }}>
+                                <div style={{ height: '80px', borderRadius: '8px', background: chatCustomize.bgColor, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                  <div style={{ background: chatCustomize.otherBubbleColor, borderRadius: '4px 12px 12px 12px', padding: '6px 10px' }}>
+                                    <p style={{ color: chatCustomize.otherTextColor, fontSize: '11px', margin: 0 }}>相手</p>
+                                  </div>
+                                  <div style={{ background: chatCustomize.myBubbleColor, borderRadius: '12px 4px 12px 12px', padding: '6px 10px' }}>
+                                    <p style={{ color: chatCustomize.myTextColor, fontSize: '11px', margin: 0 }}>自分</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* サブセクション1: 自分の吹き出し */}
+                              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                <div onClick={() => setMyBubbleSubOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: 'pointer' }}>
+                                  <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🟣 自分の吹き出し</span>
+                                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>{myBubbleSubOpen ? '▼' : '▶'}</span>
+                                </div>
+                                {myBubbleSubOpen && (
+                                  <div style={{ padding: '0 16px 16px' }}>
+                                    {renderSliderRow('myBubble', chatCustomize.myBubbleColor, 'myBubble')}
+                                    {periodSync.chatBubble && (
+                                      <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 4 }}>⏰ 時間帯別設定</div>
+                                        {PERIODS.map(p => <PeriodColorPicker key={p} label="myBubble" colorKey={p}
+                                          colors={periodChatColors.myBubble} setColors={c => setPeriodChatColors(prev => ({ ...prev, myBubble: c(prev.myBubble) as typeof prev.myBubble }))}
+                                          hues={periodChatHue.myBubble} setHues={c => setPeriodChatHue(prev => ({ ...prev, myBubble: c(prev.myBubble) as typeof prev.myBubble }))}
+                                          lightnesses={periodChatLightness.myBubble} setLightnesses={c => setPeriodChatLightness(prev => ({ ...prev, myBubble: c(prev.myBubble) as typeof prev.myBubble }))}
+                                          openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey}
+                                          paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod}
+                                          previewBg={periodChatColors.bg[p]} previewMyBubble={periodChatColors.myBubble[p]} previewOtherBubble={periodChatColors.otherBubble[p]} previewMyText={periodChatColors.myText[p]} previewOtherText={periodChatColors.otherText[p]}
+                                        />)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* サブセクション2: 相手の吹き出し */}
+                              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                <div onClick={() => setTheirBubbleSubOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: 'pointer' }}>
+                                  <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🔵 相手の吹き出し</span>
+                                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>{theirBubbleSubOpen ? '▼' : '▶'}</span>
+                                </div>
+                                {theirBubbleSubOpen && (
+                                  <div style={{ padding: '0 16px 16px' }}>
+                                    {renderSliderRow('otherBubble', chatCustomize.otherBubbleColor, 'otherBubble')}
+                                    {periodSync.chatBubble && (
+                                      <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 4 }}>⏰ 時間帯別設定</div>
+                                        {PERIODS.map(p => <PeriodColorPicker key={p} label="otherBubble" colorKey={p}
+                                          colors={periodChatColors.otherBubble} setColors={c => setPeriodChatColors(prev => ({ ...prev, otherBubble: c(prev.otherBubble) as typeof prev.otherBubble }))}
+                                          hues={periodChatHue.otherBubble} setHues={c => setPeriodChatHue(prev => ({ ...prev, otherBubble: c(prev.otherBubble) as typeof prev.otherBubble }))}
+                                          lightnesses={periodChatLightness.otherBubble} setLightnesses={c => setPeriodChatLightness(prev => ({ ...prev, otherBubble: c(prev.otherBubble) as typeof prev.otherBubble }))}
+                                          openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey}
+                                          paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod}
+                                          previewBg={periodChatColors.bg[p]} previewMyBubble={periodChatColors.myBubble[p]} previewOtherBubble={periodChatColors.otherBubble[p]} previewMyText={periodChatColors.myText[p]} previewOtherText={periodChatColors.otherText[p]}
+                                        />)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* デフォルトに戻す・保存ボタン */}
+                              <div style={{ padding: '12px 16px 8px' }}>
+                                <button onClick={() => { setChatCustomize(DEFAULT_CHAT_CUSTOMIZE); setHue(DEFAULT_CHAT_HUE); setLightness(DEFAULT_CHAT_LIGHTNESS) }} style={{ width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer' }}>⟳ デフォルトに戻す</button>
+                                <button onClick={() => handleSave('bubble')} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                                  {savedFeedback === 'bubble' ? '保存しました ✓' : '保存する'}
+                                </button>
+                              </div>
+
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 文字色 サブ折りたたみ */}
+                        <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '8px', overflow: 'hidden' }}>
+                          <div onClick={() => setOpenSubSection(p => p === 'text' ? null : 'text')} style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🔤 文字色</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubSection === 'text' ? '▼' : '▶'}</span>
+                          </div>
+                          {openSubSection === 'text' && (
+                            <div style={{ padding: '8px 0' }}>
+
+                              {/* プレビュー */}
+                              <div style={{ padding: '0 16px 12px' }}>
+                                <div style={{ background: chatCustomize.bgColor, borderRadius: 10, padding: '12px 10px', display: 'flex', justifyContent: 'space-between', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                  <div style={{ background: chatCustomize.otherBubbleColor, borderRadius: 12, padding: '6px 10px' }}>
+                                    <span style={{ color: chatCustomize.otherTextColor, fontSize: 12 }}>こんにちは</span>
+                                  </div>
+                                  <div style={{ background: chatCustomize.myBubbleColor, borderRadius: 12, padding: '6px 10px' }}>
+                                    <span style={{ color: chatCustomize.myTextColor, fontSize: 12 }}>よろしく！</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* サブセクション1: 自分の文字色 */}
+                              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                <div onClick={() => setMyTextSubOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: 'pointer' }}>
+                                  <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🟣 自分の文字色</span>
+                                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>{myTextSubOpen ? '▼' : '▶'}</span>
+                                </div>
+                                {myTextSubOpen && (
+                                  <div style={{ padding: '0 16px 16px' }}>
+                                    {renderSliderRow('myText', chatCustomize.myTextColor, 'myText')}
+                                    {periodSync.chatText && (
+                                      <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 4 }}>⏰ 時間帯別設定</div>
+                                        {PERIODS.map(p => <PeriodColorPicker key={p} label="myText" colorKey={p}
+                                          colors={periodChatColors.myText} setColors={c => setPeriodChatColors(prev => ({ ...prev, myText: c(prev.myText) as typeof prev.myText }))}
+                                          hues={periodChatHue.myText} setHues={c => setPeriodChatHue(prev => ({ ...prev, myText: c(prev.myText) as typeof prev.myText }))}
+                                          lightnesses={periodChatLightness.myText} setLightnesses={c => setPeriodChatLightness(prev => ({ ...prev, myText: c(prev.myText) as typeof prev.myText }))}
+                                          openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey}
+                                          paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod}
+                                        />)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* サブセクション2: 相手の文字色 */}
+                              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                <div onClick={() => setTheirTextSubOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: 'pointer' }}>
+                                  <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🔵 相手の文字色</span>
+                                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>{theirTextSubOpen ? '▼' : '▶'}</span>
+                                </div>
+                                {theirTextSubOpen && (
+                                  <div style={{ padding: '0 16px 16px' }}>
+                                    {renderSliderRow('otherText', chatCustomize.otherTextColor, 'otherText')}
+                                    {periodSync.chatText && (
+                                      <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 4 }}>⏰ 時間帯別設定</div>
+                                        {PERIODS.map(p => <PeriodColorPicker key={p} label="otherText" colorKey={p}
+                                          colors={periodChatColors.otherText} setColors={c => setPeriodChatColors(prev => ({ ...prev, otherText: c(prev.otherText) as typeof prev.otherText }))}
+                                          hues={periodChatHue.otherText} setHues={c => setPeriodChatHue(prev => ({ ...prev, otherText: c(prev.otherText) as typeof prev.otherText }))}
+                                          lightnesses={periodChatLightness.otherText} setLightnesses={c => setPeriodChatLightness(prev => ({ ...prev, otherText: c(prev.otherText) as typeof prev.otherText }))}
+                                          openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey}
+                                          paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod}
+                                        />)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* デフォルトに戻す・保存ボタン */}
+                              <div style={{ padding: '12px 16px 8px' }}>
+                                <button onClick={() => { setChatCustomize(DEFAULT_CHAT_CUSTOMIZE); setHue(DEFAULT_CHAT_HUE); setLightness(DEFAULT_CHAT_LIGHTNESS) }} style={{ width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer' }}>⟳ デフォルトに戻す</button>
+                                <button onClick={() => handleSave('text')} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                                  {savedFeedback === 'text' ? '保存しました ✓' : '保存する'}
+                                </button>
+                              </div>
+
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )
+                  })()}
+
+                </div>
+              )}
             </div>
+
+            {/* 外観設定 親折りたたみ */}
+            <div style={{ borderRadius: '12px', background: 'rgba(255,255,255,0.05)', marginBottom: '8px', overflow: 'hidden' }}>
+              <div onClick={() => setOuterOpen(p => !p)} style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', cursor: 'pointer' }}>
+                <span style={{ color: 'white', fontSize: '14px', fontWeight: 600 }}>🎨 外観設定</span>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>{outerOpen ? '▼' : '▶'}</span>
+              </div>
+              {outerOpen && (
+                <div style={{ padding: '0 12px 12px' }}>
+                  {(() => {
+                    const THEME_COLORS_A = [
+                      ['#1a0000','#330000','#660000','#990000','#cc0000','#ff0000','#ff4d4d','#ff9999','#ffcccc','#fff0f0'],
+                      ['#1a0d00','#331a00','#663300','#994d00','#cc6600','#ff8000','#ffaa4d','#ffcc99','#ffe5cc','#fff5e6'],
+                      ['#1a1a00','#333300','#666600','#999900','#cccc00','#ffff00','#ffff4d','#ffff99','#ffffcc','#fffff0'],
+                      ['#001a00','#003300','#006600','#009900','#00cc00','#00ff00','#4dff4d','#99ff99','#ccffcc','#f0fff0'],
+                      ['#001a1a','#003333','#006666','#009999','#00cccc','#00ffff','#4dffff','#99ffff','#ccffff','#f0ffff'],
+                      ['#00001a','#000033','#000066','#000099','#0000cc','#0000ff','#4d4dff','#9999ff','#ccccff','#f0f0ff'],
+                      ['#0d001a','#1a0033','#330066','#4d0099','#6600cc','#8000ff','#aa4dff','#cc99ff','#e5ccff','#f5e6ff'],
+                      ['#1a0011','#330022','#660044','#990066','#cc0088','#ff00aa','#ff4dc4','#ff99dd','#ffcced','#fff0f8'],
+                      ['#0a0a0a','#1a1a1a','#333333','#4d4d4d','#666666','#808080','#999999','#b3b3b3','#cccccc','#e6e6e6'],
+                      ['#ffffff','#f5f5f5','#ebebeb','#e0e0e0','#d6d6d6','#cccccc','#c2c2c2','#b8b8b8','#adadad','#a3a3a3'],
+                    ]
+                    const STANDARD_A = ['#c00000','#ff0000','#ffc000','#ffff00','#92d050','#00b050','#00b0f0','#0070c0','#002060','#7030a0']
+
+                    const handleAppearanceSave = (section: string) => {
+                      try {
+                        localStorage.setItem('appearanceCustomize', JSON.stringify(appearanceCustomize))
+                        localStorage.setItem('periodAppearanceColors', JSON.stringify(periodAppearanceColors))
+                        setSavedFeedbackAppearance(section); setTimeout(() => setSavedFeedbackAppearance(null), 1500)
+                      } catch (e) { console.error(e) }
+                    }
+                    const PERIODS_A: Array<'morning' | 'afternoon' | 'evening' | 'night'> = ['morning', 'afternoon', 'evening', 'night']
+
+                    const renderAppearanceSlider = (subKey: 'tabBg' | 'tabText' | 'tabActive', currentColor: string, label: string) => {
+                      const h = hueAppearance[subKey]; const l = lightnessAppearance[subKey]
+                      const color = `hsl(${h}, 70%, ${l}%)`
+                      const applyA = (c: string) => {
+                        if (subKey === 'tabBg') setAppearanceCustomize((p: typeof appearanceCustomize) => ({ ...p, tabBgColor: c }))
+                        else if (subKey === 'tabText') setAppearanceCustomize((p: typeof appearanceCustomize) => ({ ...p, tabTextColor: c }))
+                        else setAppearanceCustomize((p: typeof appearanceCustomize) => ({ ...p, tabActiveColor: c }))
+                      }
+                      return (
+                        <div style={{ marginBottom: '10px' }} key={subKey}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: color, flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)' }} />
+                            <div style={{ flex: 1 }}>
+                              <input className="hue-slider" type="range" min={0} max={360} value={h}
+                                onChange={e => { const v = Number(e.target.value); setHueAppearance(p => ({ ...p, [subKey]: v })); applyA(`hsl(${v}, 70%, ${l}%)`) }}
+                                onInput={e => { const v = Number((e.target as HTMLInputElement).value); setHueAppearance(p => ({ ...p, [subKey]: v })); applyA(`hsl(${v}, 70%, ${l}%)`) }}
+                                style={{ width: '100%', pointerEvents: 'auto' }} />
+                            </div>
+                            <button onClick={() => setPaletteOpenAppearance(p => p === subKey ? null : subKey)} style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>🎨</button>
+                          </div>
+                          <div style={{ paddingLeft: '40px', paddingRight: '40px', marginBottom: '6px' }}>
+                            <input type="range" min={10} max={90} value={l} className="hue-slider"
+                              style={{ background: `linear-gradient(to right, hsl(${h},70%,10%), hsl(${h},70%,50%), hsl(${h},70%,90%))`, width: '100%', pointerEvents: 'auto' }}
+                              onChange={e => { const v = Number(e.target.value); setLightnessAppearance(p => ({ ...p, [subKey]: v })); applyA(`hsl(${h}, 70%, ${v}%)`) }}
+                              onInput={e => { const v = Number((e.target as HTMLInputElement).value); setLightnessAppearance(p => ({ ...p, [subKey]: v })); applyA(`hsl(${h}, 70%, ${v}%)`) }} />
+                          </div>
+                          {paletteOpenAppearance === subKey && (
+                            <>
+                              <div onClick={() => setPaletteOpenAppearance(null)} style={{ position: 'fixed', inset: 0, zIndex: 0 }} />
+                              <div style={{ position: 'relative', zIndex: 1, backgroundColor: 'rgba(20,20,40,0.97)', borderRadius: 12, padding: 8, marginTop: 8 }}>
+                                <div style={{ display: 'flex', gap: '2px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                                  {THEME_COLORS_A.map((col, ci) => (
+                                    <div key={ci} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                      {col.map((c, ri) => <button key={ri} onClick={() => applyA(c)} style={{ width: 22, height: 16, borderRadius: 2, background: c, border: currentColor === c ? '2px solid white' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />)}
+                                    </div>
+                                  ))}
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                  {STANDARD_A.map(c => <button key={c} onClick={() => applyA(c)} style={{ width: 22, height: 22, borderRadius: '50%', background: c, border: currentColor === c ? '2px solid white' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />)}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <>
+                        {/* タブ背景色 */}
+                        <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '8px', overflow: 'hidden' }}>
+                          <div onClick={() => setOpenSubAppearance(p => p === 'tabBg' ? null : 'tabBg')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🖼️ タブ背景色</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubAppearance === 'tabBg' ? '▼' : '▶'}</span>
+                          </div>
+                          {openSubAppearance === 'tabBg' && (
+                            <div style={{ padding: '0 12px 12px' }}>
+                              <div style={{ height: '48px', borderRadius: '8px', background: appearanceCustomize.tabBgColor, marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                {['Profile','Museum','Decoration'].map((t, i) => <span key={i} style={{ color: i === 1 ? appearanceCustomize.tabActiveColor : appearanceCustomize.tabTextColor, fontSize: '11px', fontWeight: i === 1 ? 700 : 400, borderBottom: i === 1 ? `2px solid ${appearanceCustomize.tabActiveColor}` : 'none', paddingBottom: '2px' }}>{t}</span>)}
+                              </div>
+                              {renderAppearanceSlider('tabBg', appearanceCustomize.tabBgColor, 'タブ背景色')}
+                              {periodSync.appearance && (
+                                <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 8 }}>⏰ 時間帯別設定</div>
+                                  {PERIODS_A.map(p => <PeriodColorPicker key={p} label="tabBg" colorKey={p} colors={periodAppearanceColors.tabBg} setColors={c => setPeriodAppearanceColors(prev => ({ ...prev, tabBg: c(prev.tabBg) as typeof prev.tabBg }))} hues={{ morning:0, afternoon:0, evening:0, night:0 }} setHues={() => {}} lightnesses={{ morning:50, afternoon:50, evening:50, night:50 }} setLightnesses={() => {}} openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey} paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod} />)}
+                                </div>
+                              )}
+                              <button onClick={() => setAppearanceCustomize(DEFAULT_APPEARANCE_CUSTOMIZE)} style={{ width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer' }}>⟳ デフォルトに戻す</button>
+                              <button onClick={() => handleAppearanceSave('tabBg')} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600, marginTop: 0 }}>
+                                {savedFeedbackAppearance === 'tabBg' ? '保存しました ✓' : '保存する'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {/* タブ文字色 */}
+                        <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '8px', overflow: 'hidden' }}>
+                          <div onClick={() => setOpenSubAppearance(p => p === 'tabText' ? null : 'tabText')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🔤 タブ文字色</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubAppearance === 'tabText' ? '▼' : '▶'}</span>
+                          </div>
+                          {openSubAppearance === 'tabText' && (
+                            <div style={{ padding: '0 12px 12px' }}>
+                              <div style={{ height: '48px', borderRadius: '8px', background: appearanceCustomize.tabBgColor, marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                {['Profile','Museum','Decoration'].map((t, i) => <span key={i} style={{ color: i === 1 ? appearanceCustomize.tabActiveColor : appearanceCustomize.tabTextColor, fontSize: '11px' }}>{t}</span>)}
+                              </div>
+                              {renderAppearanceSlider('tabText', appearanceCustomize.tabTextColor, 'タブ文字色')}
+                              {periodSync.appearance && (
+                                <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 8 }}>⏰ 時間帯別設定</div>
+                                  {PERIODS_A.map(p => <PeriodColorPicker key={p} label="tabText" colorKey={p} colors={periodAppearanceColors.tabText} setColors={c => setPeriodAppearanceColors(prev => ({ ...prev, tabText: c(prev.tabText) as typeof prev.tabText }))} hues={{ morning:0, afternoon:0, evening:0, night:0 }} setHues={() => {}} lightnesses={{ morning:50, afternoon:50, evening:50, night:50 }} setLightnesses={() => {}} paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod} openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey} />)}
+                                </div>
+                              )}
+                              <button onClick={() => setAppearanceCustomize(DEFAULT_APPEARANCE_CUSTOMIZE)} style={{ width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer' }}>⟳ デフォルトに戻す</button>
+                              <button onClick={() => handleAppearanceSave('tabText')} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600, marginTop: 0 }}>
+                                {savedFeedbackAppearance === 'tabText' ? '保存しました ✓' : '保存する'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {/* タブアクティブ色 */}
+                        <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '8px', overflow: 'hidden' }}>
+                          <div onClick={() => setOpenSubAppearance(p => p === 'tabActive' ? null : 'tabActive')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>✨ タブアクティブ色</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubAppearance === 'tabActive' ? '▼' : '▶'}</span>
+                          </div>
+                          {openSubAppearance === 'tabActive' && (
+                            <div style={{ padding: '0 12px 12px' }}>
+                              <div style={{ height: '48px', borderRadius: '8px', background: appearanceCustomize.tabBgColor, marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                {['Profile','Museum','Decoration'].map((t, i) => <span key={i} style={{ color: i === 1 ? appearanceCustomize.tabActiveColor : appearanceCustomize.tabTextColor, fontSize: '11px', fontWeight: i === 1 ? 700 : 400, borderBottom: i === 1 ? `2px solid ${appearanceCustomize.tabActiveColor}` : 'none', paddingBottom: '2px' }}>{t}</span>)}
+                              </div>
+                              {renderAppearanceSlider('tabActive', appearanceCustomize.tabActiveColor, 'アクティブ色')}
+                              {periodSync.appearance && (
+                                <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 8 }}>⏰ 時間帯別設定</div>
+                                  {PERIODS_A.map(p => <PeriodColorPicker key={p} label="tabActive" colorKey={p} colors={periodAppearanceColors.tabActive} setColors={c => setPeriodAppearanceColors(prev => ({ ...prev, tabActive: c(prev.tabActive) as typeof prev.tabActive }))} hues={{ morning:0, afternoon:0, evening:0, night:0 }} setHues={() => {}} lightnesses={{ morning:50, afternoon:50, evening:50, night:50 }} setLightnesses={() => {}} paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod} openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey} />)}
+                                </div>
+                              )}
+                              <button onClick={() => setAppearanceCustomize(DEFAULT_APPEARANCE_CUSTOMIZE)} style={{ width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer' }}>⟳ デフォルトに戻す</button>
+                              <button onClick={() => handleAppearanceSave('tabActive')} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600, marginTop: 0 }}>
+                                {savedFeedbackAppearance === 'tabActive' ? '保存しました ✓' : '保存する'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {/* Museum編集ボタン絵文字・ドアのアレンジ */}
+                        <div style={{ padding: '4px 0 4px', marginTop: '8px' }}>
+                          <div onClick={() => setDecorSubPage('emoji')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
+                            <span style={{ color: 'white', fontSize: 14 }}>🎨 Museum編集ボタン絵文字</span>
+                            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>{editBtnEmoji} ›</span>
+                          </div>
+                          <div onClick={() => setDecorSubPage('zukan')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', cursor: 'pointer' }}>
+                            <span style={{ color: 'white', fontSize: 14 }}>📚 ドアのアレンジ</span>
+                            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>図鑑から ›</span>
+                          </div>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+
+            {/* ナビ設定 親折りたたみ */}
+            <div style={{ borderRadius: '12px', background: 'rgba(255,255,255,0.05)', marginBottom: '8px', overflow: 'hidden' }}>
+              <div onClick={() => setNaviOpen(p => !p)} style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', cursor: 'pointer' }}>
+                <span style={{ color: 'white', fontSize: '14px', fontWeight: 600 }}>🧭 ナビ設定</span>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>{naviOpen ? '▼' : '▶'}</span>
+              </div>
+              {naviOpen && (
+                <div style={{ padding: '0 12px 12px' }}>
+                  {(() => {
+                    const THEME_COLORS_N = [
+                      ['#1a0000','#330000','#660000','#990000','#cc0000','#ff0000','#ff4d4d','#ff9999','#ffcccc','#fff0f0'],
+                      ['#1a0d00','#331a00','#663300','#994d00','#cc6600','#ff8000','#ffaa4d','#ffcc99','#ffe5cc','#fff5e6'],
+                      ['#1a1a00','#333300','#666600','#999900','#cccc00','#ffff00','#ffff4d','#ffff99','#ffffcc','#fffff0'],
+                      ['#001a00','#003300','#006600','#009900','#00cc00','#00ff00','#4dff4d','#99ff99','#ccffcc','#f0fff0'],
+                      ['#001a1a','#003333','#006666','#009999','#00cccc','#00ffff','#4dffff','#99ffff','#ccffff','#f0ffff'],
+                      ['#00001a','#000033','#000066','#000099','#0000cc','#0000ff','#4d4dff','#9999ff','#ccccff','#f0f0ff'],
+                      ['#0d001a','#1a0033','#330066','#4d0099','#6600cc','#8000ff','#aa4dff','#cc99ff','#e5ccff','#f5e6ff'],
+                      ['#1a0011','#330022','#660044','#990066','#cc0088','#ff00aa','#ff4dc4','#ff99dd','#ffcced','#fff0f8'],
+                      ['#0a0a0a','#1a1a1a','#333333','#4d4d4d','#666666','#808080','#999999','#b3b3b3','#cccccc','#e6e6e6'],
+                      ['#ffffff','#f5f5f5','#ebebeb','#e0e0e0','#d6d6d6','#cccccc','#c2c2c2','#b8b8b8','#adadad','#a3a3a3'],
+                    ]
+                    const STANDARD_N = ['#c00000','#ff0000','#ffc000','#ffff00','#92d050','#00b050','#00b0f0','#0070c0','#002060','#7030a0']
+
+                    const handleNaviSave = (section: string) => {
+                      try {
+                        localStorage.setItem('naviCustomize', JSON.stringify(naviCustomize))
+                        localStorage.setItem('periodNaviColors', JSON.stringify(periodNaviColors))
+                        setSavedFeedbackNavi(section); setTimeout(() => setSavedFeedbackNavi(null), 1500)
+                      } catch (e) { console.error(e) }
+                    }
+                    const PERIODS_N: Array<'morning' | 'afternoon' | 'evening' | 'night'> = ['morning', 'afternoon', 'evening', 'night']
+
+                    const renderNaviSlider = (subKey: 'bg' | 'text' | 'active', currentColor: string) => {
+                      const h = hueNavi[subKey]; const l = lightnessNavi[subKey]
+                      const applyN = (c: string) => {
+                        if (subKey === 'bg') setNaviCustomize((p: typeof naviCustomize) => ({ ...p, bgColor: c }))
+                        else if (subKey === 'text') setNaviCustomize((p: typeof naviCustomize) => ({ ...p, textColor: c }))
+                        else setNaviCustomize((p: typeof naviCustomize) => ({ ...p, activeColor: c }))
+                      }
+                      return (
+                        <div style={{ marginBottom: '10px' }} key={subKey}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: `hsl(${h}, 70%, ${l}%)`, flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)' }} />
+                            <div style={{ flex: 1 }}>
+                              <input className="hue-slider" type="range" min={0} max={360} value={h}
+                                onChange={e => { const v = Number(e.target.value); setHueNavi(p => ({ ...p, [subKey]: v })); applyN(`hsl(${v}, 70%, ${l}%)`) }}
+                                onInput={e => { const v = Number((e.target as HTMLInputElement).value); setHueNavi(p => ({ ...p, [subKey]: v })); applyN(`hsl(${v}, 70%, ${l}%)`) }}
+                                style={{ width: '100%', pointerEvents: 'auto' }} />
+                            </div>
+                            <button onClick={() => setPaletteOpenNavi(p => p === subKey ? null : subKey)} style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>🎨</button>
+                          </div>
+                          <div style={{ paddingLeft: '40px', paddingRight: '40px', marginBottom: '6px' }}>
+                            <input type="range" min={10} max={90} value={l} className="hue-slider"
+                              style={{ background: `linear-gradient(to right, hsl(${h},70%,10%), hsl(${h},70%,50%), hsl(${h},70%,90%))`, width: '100%', pointerEvents: 'auto' }}
+                              onChange={e => { const v = Number(e.target.value); setLightnessNavi(p => ({ ...p, [subKey]: v })); applyN(`hsl(${h}, 70%, ${v}%)`) }}
+                              onInput={e => { const v = Number((e.target as HTMLInputElement).value); setLightnessNavi(p => ({ ...p, [subKey]: v })); applyN(`hsl(${h}, 70%, ${v}%)`) }} />
+                          </div>
+                          {paletteOpenNavi === subKey && (
+                            <>
+                              <div onClick={() => setPaletteOpenNavi(null)} style={{ position: 'fixed', inset: 0, zIndex: 0 }} />
+                              <div style={{ position: 'relative', zIndex: 1, backgroundColor: 'rgba(20,20,40,0.97)', borderRadius: 12, padding: 8, marginTop: 8 }}>
+                                <div style={{ display: 'flex', gap: '2px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                                  {THEME_COLORS_N.map((col, ci) => (
+                                    <div key={ci} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                      {col.map((c, ri) => <button key={ri} onClick={() => applyN(c)} style={{ width: 22, height: 16, borderRadius: 2, background: c, border: currentColor === c ? '2px solid white' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />)}
+                                    </div>
+                                  ))}
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                  {STANDARD_N.map(c => <button key={c} onClick={() => applyN(c)} style={{ width: 22, height: 22, borderRadius: '50%', background: c, border: currentColor === c ? '2px solid white' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />)}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <>
+                        {/* ナビ背景色 */}
+                        <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '8px', overflow: 'hidden' }}>
+                          <div onClick={() => setOpenSubNavi(p => p === 'bg' ? null : 'bg')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🟦 ナビ背景色</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubNavi === 'bg' ? '▼' : '▶'}</span>
+                          </div>
+                          {openSubNavi === 'bg' && (
+                            <div style={{ padding: '0 12px 12px' }}>
+                              <div style={{ height: '48px', borderRadius: '8px', background: naviCustomize.bgColor, marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-around', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                {[['🏛️','Museum'],['🌐','Room'],['🔍','Explore']].map(([ic, lb], i) => (
+                                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                    <span style={{ fontSize: '16px' }}>{ic}</span>
+                                    <span style={{ color: naviCustomize.textColor, fontSize: '9px' }}>{lb}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              {renderNaviSlider('bg', naviCustomize.bgColor)}
+                              {periodSync.navi && (
+                                <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 8 }}>⏰ 時間帯別設定</div>
+                                  {PERIODS_N.map(p => <PeriodColorPicker key={p} label="naviBg" colorKey={p} colors={periodNaviColors.bg} setColors={c => setPeriodNaviColors(prev => ({ ...prev, bg: c(prev.bg) as typeof prev.bg }))} hues={{ morning:0, afternoon:0, evening:0, night:0 }} setHues={() => {}} lightnesses={{ morning:50, afternoon:50, evening:50, night:50 }} setLightnesses={() => {}} paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod} openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey} />)}
+                                </div>
+                              )}
+                              <button onClick={() => setNaviCustomize(DEFAULT_NAVI_CUSTOMIZE)} style={{ width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer' }}>⟳ デフォルトに戻す</button>
+                              <button onClick={() => handleNaviSave('bg')} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600, marginTop: 0 }}>
+                                {savedFeedbackNavi === 'bg' ? '保存しました ✓' : '保存する'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {/* ナビ文字色 */}
+                        <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '8px', overflow: 'hidden' }}>
+                          <div onClick={() => setOpenSubNavi(p => p === 'text' ? null : 'text')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>🔤 ナビ文字色</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubNavi === 'text' ? '▼' : '▶'}</span>
+                          </div>
+                          {openSubNavi === 'text' && (
+                            <div style={{ padding: '0 12px 12px' }}>
+                              <div style={{ height: '48px', borderRadius: '8px', background: naviCustomize.bgColor, marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-around', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                {[['🏛️','Museum'],['🌐','Room'],['🔍','Explore']].map(([ic, lb], i) => (
+                                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                    <span style={{ fontSize: '16px' }}>{ic}</span>
+                                    <span style={{ color: naviCustomize.textColor, fontSize: '9px' }}>{lb}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              {renderNaviSlider('text', naviCustomize.textColor)}
+                              {periodSync.navi && (
+                                <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 8 }}>⏰ 時間帯別設定</div>
+                                  {PERIODS_N.map(p => <PeriodColorPicker key={p} label="naviText" colorKey={p} colors={periodNaviColors.text} setColors={c => setPeriodNaviColors(prev => ({ ...prev, text: c(prev.text) as typeof prev.text }))} hues={{ morning:0, afternoon:0, evening:0, night:0 }} setHues={() => {}} lightnesses={{ morning:50, afternoon:50, evening:50, night:50 }} setLightnesses={() => {}} paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod} openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey} />)}
+                                </div>
+                              )}
+                              <button onClick={() => setNaviCustomize(DEFAULT_NAVI_CUSTOMIZE)} style={{ width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer' }}>⟳ デフォルトに戻す</button>
+                              <button onClick={() => handleNaviSave('text')} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600, marginTop: 0 }}>
+                                {savedFeedbackNavi === 'text' ? '保存しました ✓' : '保存する'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {/* ナビアクティブ色 */}
+                        <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '8px', overflow: 'hidden' }}>
+                          <div onClick={() => setOpenSubNavi(p => p === 'active' ? null : 'active')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>✨ ナビアクティブ色</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubNavi === 'active' ? '▼' : '▶'}</span>
+                          </div>
+                          {openSubNavi === 'active' && (
+                            <div style={{ padding: '0 12px 12px' }}>
+                              <div style={{ height: '48px', borderRadius: '8px', background: naviCustomize.bgColor, marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-around', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                {[['🏛️','Museum'],['🌐','Room'],['🔍','Explore']].map(([ic, lb], i) => (
+                                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                    <span style={{ fontSize: '16px' }}>{ic}</span>
+                                    <span style={{ color: i === 0 ? naviCustomize.activeColor : naviCustomize.textColor, fontSize: '9px', fontWeight: i === 0 ? 700 : 400 }}>{lb}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              {renderNaviSlider('active', naviCustomize.activeColor)}
+                              {periodSync.navi && (
+                                <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 8 }}>⏰ 時間帯別設定</div>
+                                  {PERIODS_N.map(p => <PeriodColorPicker key={p} label="naviActive" colorKey={p} colors={periodNaviColors.active} setColors={c => setPeriodNaviColors(prev => ({ ...prev, active: c(prev.active) as typeof prev.active }))} hues={{ morning:0, afternoon:0, evening:0, night:0 }} setHues={() => {}} lightnesses={{ morning:50, afternoon:50, evening:50, night:50 }} setLightnesses={() => {}} paletteKey={paletteOpenPeriod} setPaletteKey={setPaletteOpenPeriod} openKey={openPeriodColorKey} setOpenKey={setOpenPeriodColorKey} />)}
+                                </div>
+                              )}
+                              <button onClick={() => setNaviCustomize(DEFAULT_NAVI_CUSTOMIZE)} style={{ width: '100%', padding: '8px 0', borderRadius: 8, marginBottom: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer' }}>⟳ デフォルトに戻す</button>
+                              <button onClick={() => handleNaviSave('active')} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600, marginTop: 0 }}>
+                                {savedFeedbackNavi === 'active' ? '保存しました ✓' : '保存する'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+
+            {/* 時間帯設定 親折りたたみ */}
+            <div style={{ borderRadius: '12px', background: 'rgba(255,255,255,0.05)', marginBottom: '8px', overflow: 'hidden' }}>
+              <div onClick={() => setPeriodSettingOpen(p => !p)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', cursor: 'pointer' }}>
+                <span style={{ color: 'white', fontSize: '14px', fontWeight: 600 }}>🕐 時間帯設定</span>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>{periodSettingOpen ? '▼' : '▶'}</span>
+              </div>
+              {periodSettingOpen && (() => {
+                const PERIOD_DEFAULTS = {
+                  morning:   { start: 6,  end: 11 },
+                  afternoon: { start: 11, end: 17 },
+                  evening:   { start: 17, end: 21 },
+                  night:     { start: 21, end: 6  },
+                }
+                const handlePeriodSave = () => {
+                  try {
+                    localStorage.setItem('periodHours', JSON.stringify(periodHours))
+                    localStorage.setItem('periodSync', JSON.stringify(periodSync))
+                    setSavedFeedbackPeriod(true)
+                    setTimeout(() => setSavedFeedbackPeriod(false), 1500)
+                  } catch (e) { console.error(e) }
+                }
+                const PERIOD_INFO: { key: 'morning' | 'afternoon' | 'evening' | 'night'; icon: string; label: string }[] = [
+                  { key: 'morning',   icon: '🌅', label: '朝' },
+                  { key: 'afternoon', icon: '🌤️', label: '昼' },
+                  { key: 'evening',   icon: '🌆', label: '夕方' },
+                  { key: 'night',     icon: '🌙', label: '夜' },
+                ]
+                return (
+                  <div style={{ padding: '0 12px 12px' }}>
+                    {/* 時間帯連動トグル */}
+                    <div style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', padding: '4px 12px', marginTop: '8px', marginBottom: '8px' }}>
+                      {([
+                        ['chatBg',     'チャット背景'],
+                        ['chatBubble', '吹き出し'],
+                        ['chatText',   '文字色'],
+                        ['appearance', '外観（タブ）'],
+                        ['navi',       'ナビ'],
+                      ] as const).map(([key, label]) => (
+                        <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                          <span style={{ color: 'white', fontSize: 14 }}>{label}</span>
+                          <div onClick={() => setPeriodSync((prev: typeof periodSync) => ({ ...prev, [key]: !prev[key] }))} style={{ width: 44, height: 24, borderRadius: 12, cursor: 'pointer', backgroundColor: periodSync[key] ? '#7c3aed' : 'rgba(255,255,255,0.2)', position: 'relative', transition: 'background 0.2s' }}>
+                            <div style={{ position: 'absolute', top: 2, left: periodSync[key] ? 22 : 2, width: 20, height: 20, borderRadius: '50%', backgroundColor: 'white', transition: 'left 0.2s' }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 各時間帯サブ折りたたみ */}
+                    {PERIOD_INFO.map(({ key, icon, label }) => (
+                      <div key={key} style={{ borderRadius: '8px', background: 'rgba(255,255,255,0.03)', marginTop: '6px', overflow: 'hidden' }}>
+                        <div onClick={() => setOpenSubPeriod(p => p === key ? null : key)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', cursor: 'pointer' }}>
+                          <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontWeight: 600 }}>{icon} {label}</span>
+                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{openSubPeriod === key ? '▼' : '▶'}</span>
+                        </div>
+                        {openSubPeriod === key && (
+                          <div style={{ padding: '0 12px 12px' }}>
+                            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontSize: 20 }}>{icon}</span>
+                              <span style={{ color: 'white', fontSize: 13 }}>{label}  {periodHours[key].start}:00 〜 {periodHours[key].end}:00</span>
+                            </div>
+                            {/* 開始時刻 */}
+                            <div style={{ marginBottom: 8 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>開始</span>
+                                <span style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>{periodHours[key].start}:00</span>
+                              </div>
+                              <input type="range" min={0} max={23} value={periodHours[key].start}
+                                className="hue-slider"
+                                style={{ background: `linear-gradient(to right, #7c3aed ${periodHours[key].start / 23 * 100}%, rgba(255,255,255,0.2) ${periodHours[key].start / 23 * 100}%)`, width: '100%', pointerEvents: 'auto' }}
+                                onChange={e => setPeriodHours((prev: typeof periodHours) => ({ ...prev, [key]: { ...prev[key], start: Number(e.target.value) } }))}
+                                onInput={e => setPeriodHours((prev: typeof periodHours) => ({ ...prev, [key]: { ...prev[key], start: Number((e.target as HTMLInputElement).value) } }))}
+                              />
+                            </div>
+                            {/* 終了時刻 */}
+                            <div style={{ marginBottom: 8 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>終了</span>
+                                <span style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>{periodHours[key].end}:00</span>
+                              </div>
+                              <input type="range" min={0} max={23} value={periodHours[key].end}
+                                className="hue-slider"
+                                style={{ background: `linear-gradient(to right, #a78bfa ${periodHours[key].end / 23 * 100}%, rgba(255,255,255,0.2) ${periodHours[key].end / 23 * 100}%)`, width: '100%', pointerEvents: 'auto' }}
+                                onChange={e => setPeriodHours((prev: typeof periodHours) => ({ ...prev, [key]: { ...prev[key], end: Number(e.target.value) } }))}
+                                onInput={e => setPeriodHours((prev: typeof periodHours) => ({ ...prev, [key]: { ...prev[key], end: Number((e.target as HTMLInputElement).value) } }))}
+                              />
+                            </div>
+                            <button onClick={() => setPeriodHours((prev: typeof periodHours) => ({ ...prev, [key]: PERIOD_DEFAULTS[key] }))} style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', marginTop: 6 }}>
+                              デフォルトに戻す
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    <div style={{ height: 12 }} />
+                    <button onClick={() => {
+                      setPeriodHours(PERIOD_DEFAULTS)
+                      setPeriodChatColors(DEFAULT_PERIOD_CHAT_COLORS)
+                      setPeriodChatHue(DEFAULT_PERIOD_CHAT_HUE)
+                      setPeriodChatLightness(DEFAULT_PERIOD_CHAT_LIGHTNESS)
+                    }} style={{ width: '100%', padding: '10px 0', borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: 'none', fontSize: 14, cursor: 'pointer', marginBottom: 8 }}>
+                      ⟳ すべてデフォルトに戻す
+                    </button>
+                    <button onClick={handlePeriodSave} style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: '10px 0', width: '100%', color: 'white', fontSize: 14, border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                      {savedFeedbackPeriod ? '保存しました ✓' : '保存する'}
+                    </button>
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* タイムラインカード色 親折りたたみ */}
+            <div style={{ borderRadius: '12px', background: 'rgba(255,255,255,0.05)', marginBottom: '8px', overflow: 'hidden' }}>
+              <div onClick={() => setCardColorSectionOpen(p => !p)} style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', cursor: 'pointer' }}>
+                <span style={{ color: 'white', fontSize: '14px', fontWeight: 600 }}>📋 タイムラインカード色</span>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>{cardColorSectionOpen ? '▼' : '▶'}</span>
+              </div>
+              {cardColorSectionOpen && (
+                <div style={{ padding: '0 12px 12px' }}>
+                  {/* プレビュー */}
+                  <div style={{
+                    borderRadius: '12px', padding: '14px 16px', marginBottom: '12px',
+                    background: `rgb(${globalCardBgColor.r},${globalCardBgColor.g},${globalCardBgColor.b})`,
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}>
+                    <p style={{ color: `rgb(${globalCardTextColor.r},${globalCardTextColor.g},${globalCardTextColor.b})`, fontSize: '13px', margin: 0 }}>
+                      タイムライン投稿カードのプレビューです
+                    </p>
+                  </div>
+
+                  {/* カード背景色 RGB */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, margin: 0, flex: 1 }}>カード背景色</p>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: `rgb(${globalCardBgColor.r},${globalCardBgColor.g},${globalCardBgColor.b})`, flexShrink: 0, border: '2px solid rgba(255,255,255,0.2)' }} />
+                    <button onClick={() => setCardBgPaletteOpen(p => !p)} style={{ width: '28px', height: '28px', borderRadius: '7px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', fontSize: '14px', cursor: 'pointer', flexShrink: 0 }}>🎨</button>
+                  </div>
+                  {([
+                    { ch: 'r', lbl: 'R', val: globalCardBgColor.r },
+                    { ch: 'g', lbl: 'G', val: globalCardBgColor.g },
+                    { ch: 'b', lbl: 'B', val: globalCardBgColor.b },
+                  ] as const).map(({ ch, lbl, val }) => (
+                    <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', width: 10, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                      <div style={{ position: 'relative', flex: 1, height: '20px', display: 'flex', alignItems: 'center' }}>
+                        <div style={{ position: 'absolute', left: 0, right: 0, height: '6px', borderRadius: '3px', pointerEvents: 'none',
+                          background: ch==='r'
+                            ? `linear-gradient(to right, rgb(0,${globalCardBgColor.g},${globalCardBgColor.b}), rgb(255,${globalCardBgColor.g},${globalCardBgColor.b}))`
+                            : ch==='g'
+                            ? `linear-gradient(to right, rgb(${globalCardBgColor.r},0,${globalCardBgColor.b}), rgb(${globalCardBgColor.r},255,${globalCardBgColor.b}))`
+                            : `linear-gradient(to right, rgb(${globalCardBgColor.r},${globalCardBgColor.g},0), rgb(${globalCardBgColor.r},${globalCardBgColor.g},255))`,
+                        }} />
+                        <input type="range" min={0} max={255} value={val}
+                          style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, cursor: 'pointer', height: '20px', margin: 0 }}
+                          onChange={e => setGlobalCardBgColor(p => ({ ...p, [ch]: Number(e.target.value) }))}
+                        />
+                        <div style={{ position: 'absolute', left: `calc(${val/255*100}% - 8px)`, width: '16px', height: '16px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', pointerEvents: 'none' }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', width: 22, textAlign: 'right', flexShrink: 0 }}>{val}</span>
+                    </div>
+                  ))}
+                  {cardBgPaletteOpen && (
+                    <>
+                      <div onClick={() => setCardBgPaletteOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 0 }} />
+                      <div style={{ position: 'relative', zIndex: 1, background: 'rgba(20,20,40,0.97)', borderRadius: 10, padding: 8, marginTop: 6, marginBottom: 6 }}>
+                        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, margin: '0 0 4px' }}>おすすめ</p>
+                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                          {CARD_PALETTE_DEFAULTS.map(c => {
+                            const m = c.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
+                            if (!m) return null
+                            return <button key={c} onClick={() => setGlobalCardBgColor({ r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) })} style={{ width: 22, height: 22, borderRadius: 3, background: c, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />
+                          })}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginBottom: 6 }}>
+                          {CARD_PALETTE_COLORS.flat().map((c, i) => {
+                            const m = c.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
+                            if (!m) return null
+                            return <button key={i} onClick={() => setGlobalCardBgColor({ r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) })} style={{ width: 22, height: 16, borderRadius: 2, background: c, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', padding: 0 }} />
+                          })}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                          {['#ff0000','#ff4400','#ffaa00','#aaff00','#00cc00','#00cccc','#0088ff','#000088','#6600cc'].map(c => {
+                            const m = c.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
+                            if (!m) return null
+                            return <button key={c} onClick={() => setGlobalCardBgColor({ r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) })} style={{ width: 22, height: 22, borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* カード文字色 RGB */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, marginTop: 10 }}>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, margin: 0, flex: 1 }}>カード文字色</p>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: `rgb(${globalCardTextColor.r},${globalCardTextColor.g},${globalCardTextColor.b})`, flexShrink: 0, border: '2px solid rgba(255,255,255,0.2)' }} />
+                    <button onClick={() => setCardTextPaletteOpen(p => !p)} style={{ width: '28px', height: '28px', borderRadius: '7px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', fontSize: '14px', cursor: 'pointer', flexShrink: 0 }}>🎨</button>
+                  </div>
+                  {([
+                    { ch: 'r', lbl: 'R', val: globalCardTextColor.r },
+                    { ch: 'g', lbl: 'G', val: globalCardTextColor.g },
+                    { ch: 'b', lbl: 'B', val: globalCardTextColor.b },
+                  ] as const).map(({ ch, lbl, val }) => (
+                    <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', width: 10, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                      <div style={{ position: 'relative', flex: 1, height: '20px', display: 'flex', alignItems: 'center' }}>
+                        <div style={{ position: 'absolute', left: 0, right: 0, height: '6px', borderRadius: '3px', pointerEvents: 'none',
+                          background: ch==='r'
+                            ? `linear-gradient(to right, rgb(0,${globalCardTextColor.g},${globalCardTextColor.b}), rgb(255,${globalCardTextColor.g},${globalCardTextColor.b}))`
+                            : ch==='g'
+                            ? `linear-gradient(to right, rgb(${globalCardTextColor.r},0,${globalCardTextColor.b}), rgb(${globalCardTextColor.r},255,${globalCardTextColor.b}))`
+                            : `linear-gradient(to right, rgb(${globalCardTextColor.r},${globalCardTextColor.g},0), rgb(${globalCardTextColor.r},${globalCardTextColor.g},255))`,
+                        }} />
+                        <input type="range" min={0} max={255} value={val}
+                          style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, cursor: 'pointer', height: '20px', margin: 0 }}
+                          onChange={e => setGlobalCardTextColor(p => ({ ...p, [ch]: Number(e.target.value) }))}
+                        />
+                        <div style={{ position: 'absolute', left: `calc(${val/255*100}% - 8px)`, width: '16px', height: '16px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', pointerEvents: 'none' }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', width: 22, textAlign: 'right', flexShrink: 0 }}>{val}</span>
+                    </div>
+                  ))}
+                  {cardTextPaletteOpen && (
+                    <>
+                      <div onClick={() => setCardTextPaletteOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 0 }} />
+                      <div style={{ position: 'relative', zIndex: 1, background: 'rgba(20,20,40,0.97)', borderRadius: 10, padding: 8, marginTop: 6, marginBottom: 6 }}>
+                        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, margin: '0 0 4px' }}>おすすめ</p>
+                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                          {CARD_PALETTE_DEFAULTS.map(c => {
+                            const m = c.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
+                            if (!m) return null
+                            return <button key={c} onClick={() => setGlobalCardTextColor({ r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) })} style={{ width: 22, height: 22, borderRadius: 3, background: c, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />
+                          })}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginBottom: 6 }}>
+                          {CARD_PALETTE_COLORS.flat().map((c, i) => {
+                            const m = c.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
+                            if (!m) return null
+                            return <button key={i} onClick={() => setGlobalCardTextColor({ r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) })} style={{ width: 22, height: 16, borderRadius: 2, background: c, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', padding: 0 }} />
+                          })}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                          {['#ff0000','#ff4400','#ffaa00','#aaff00','#00cc00','#00cccc','#0088ff','#000088','#6600cc'].map(c => {
+                            const m = c.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
+                            if (!m) return null
+                            return <button key={c} onClick={() => setGlobalCardTextColor({ r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) })} style={{ width: 22, height: 22, borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* 自分の設定を優先するトグル */}
+                  <div style={{ marginTop: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                    <div
+                      onClick={() => setGlobalUseOwnCardColor(p => !p)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer' }}
+                    >
+                      <div>
+                        <p style={{ color: 'white', fontSize: '14px', fontWeight: 600, margin: 0 }}>自分の設定を優先する</p>
+                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: '3px 0 0' }}>
+                          {globalUseOwnCardColor ? '自分のカード色設定で投稿されます' : '相手のカード色設定に合わせます'}
+                        </p>
+                      </div>
+                      <div style={{ width: '44px', height: '26px', borderRadius: '13px', background: globalUseOwnCardColor ? '#a78bfa' : 'rgba(255,255,255,0.15)', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                        <div style={{ position: 'absolute', top: '3px', left: globalUseOwnCardColor ? '21px' : '3px', width: '20px', height: '20px', borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 保存ボタン */}
+                  <button
+                    onClick={() => {
+                      try {
+                        localStorage.setItem('globalCardColors', JSON.stringify({ bg: globalCardBgColor, text: globalCardTextColor, useOwn: globalUseOwnCardColor }))
+                        setCardColorSavedFeedback(true)
+                        setTimeout(() => setCardColorSavedFeedback(false), 1500)
+                      } catch (e) { console.error(e) }
+                    }}
+                    style={{ width: '100%', padding: '10px 0', borderRadius: 8, marginTop: 10, background: cardColorSavedFeedback ? '#059669' : '#7c3aed', border: 'none', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    {cardColorSavedFeedback ? '保存しました ✓' : '保存する'}
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
@@ -1278,6 +2623,24 @@ export function MuseumView() {
         </div>
 
       </div>
+
+      {/* Collection タブ 図鑑 全画面オーバーレイ */}
+      {isDoorHallOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '100%',
+          maxWidth: '390px',
+          height: '100dvh',
+          zIndex: 200,
+          background: 'white',
+          overflow: 'hidden',
+        }}>
+          <DoorHall onEnterRoom={() => {}} initialView="list" onBack={() => { setIsDoorHallOpen(false); document.body.style.overflow = '' }} />
+        </div>
+      )}
 
       </div>{/* ── end content area ── */}
       </div>{/* ── end arc tab + content wrapper ── */}
@@ -1666,10 +3029,13 @@ export function MuseumView() {
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>色相</p>
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>{bgHue}°</p>
               </div>
-              <input type="range" min={0} max={360} value={bgHue}
-                onChange={e => setBgHue(Number(e.target.value))}
-                style={{ width: '100%', accentColor: `hsl(${bgHue},70%,60%)` }}
-              />
+              <div style={{ position: 'relative', height: '20px' }}>
+                <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '6px', transform: 'translateY(-50%)', borderRadius: '3px', background: 'linear-gradient(to right, hsl(0,80%,60%), hsl(60,80%,60%), hsl(120,80%,60%), hsl(180,80%,60%), hsl(240,80%,60%), hsl(300,80%,60%), hsl(360,80%,60%))' }} />
+                <input type="range" min={0} max={360} value={bgHue}
+                  onChange={e => setBgHue(Number(e.target.value))}
+                  style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'pointer', margin: 0 }}
+                />
+              </div>
             </div>
 
             <div>
@@ -1677,10 +3043,13 @@ export function MuseumView() {
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>彩度</p>
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>{bgSaturation}%</p>
               </div>
-              <input type="range" min={0} max={100} value={bgSaturation}
-                onChange={e => setBgSaturation(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#8b5cf6' }}
-              />
+              <div style={{ position: 'relative', height: '20px' }}>
+                <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '6px', transform: 'translateY(-50%)', borderRadius: '3px', background: `linear-gradient(to right, hsl(${bgHue},0%,60%), hsl(${bgHue},100%,60%))` }} />
+                <input type="range" min={0} max={100} value={bgSaturation}
+                  onChange={e => setBgSaturation(Number(e.target.value))}
+                  style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'pointer', margin: 0 }}
+                />
+              </div>
             </div>
 
             <div>
@@ -1688,10 +3057,13 @@ export function MuseumView() {
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>明度</p>
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>{bgLightness}%</p>
               </div>
-              <input type="range" min={5} max={100} value={bgLightness}
-                onChange={e => setBgLightness(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#8b5cf6' }}
-              />
+              <div style={{ position: 'relative', height: '20px' }}>
+                <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '6px', transform: 'translateY(-50%)', borderRadius: '3px', background: `linear-gradient(to right, hsl(${bgHue},${bgSaturation}%,5%), hsl(${bgHue},${bgSaturation}%,50%), hsl(${bgHue},${bgSaturation}%,100%))` }} />
+                <input type="range" min={5} max={100} value={bgLightness}
+                  onChange={e => setBgLightness(Number(e.target.value))}
+                  style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'pointer', margin: 0 }}
+                />
+              </div>
             </div>
 
             <div>
@@ -2083,19 +3455,95 @@ export function MuseumView() {
               <div style={{ overflowY: 'auto', flex: 1, padding: '16px', scrollbarWidth: 'none' }}>
                 <div style={{ marginBottom: '20px' }}>
                   <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '8px', letterSpacing: '0.8px' }}>ヘッダー</div>
-                  <div style={{ height: '72px', borderRadius: '12px', background: profileHeaderGradient, marginBottom: '10px' }} />
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ height: '72px', borderRadius: '12px', backgroundImage: profileHeaderImage ? `url(${profileHeaderImage})` : profileHeaderGradient, backgroundSize: 'cover', backgroundPosition: 'center', marginBottom: '10px' }} />
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                     {HEADER_PRESETS.map(g => (
-                      <button key={g} onClick={() => setProfileHeaderGradient(g)} style={{
+                      <button key={g} onClick={() => { setProfileHeaderGradient(g); setProfileHeaderImage(null) }} style={{
                         width: '36px', height: '36px', borderRadius: '8px', background: g, flexShrink: 0,
-                        border: profileHeaderGradient === g ? '2px solid white' : '2px solid transparent',
-                        boxShadow: profileHeaderGradient === g ? '0 0 0 2px #a78bfa' : 'none',
+                        border: (!profileHeaderImage && profileHeaderGradient === g) ? '2px solid white' : '2px solid transparent',
+                        boxShadow: (!profileHeaderImage && profileHeaderGradient === g) ? '0 0 0 2px #a78bfa' : 'none',
                       }} />
                     ))}
+                    <button onClick={() => headerImageInputRef.current?.click()} style={{ fontSize: '11px', padding: '6px 10px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', flexShrink: 0 }}>
+                      📷 画像
+                    </button>
+                    <input ref={headerImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                      const file = e.target.files?.[0]
+                      if (file) setProfileHeaderImage(URL.createObjectURL(file))
+                    }} />
+                    {profileHeaderImage && (
+                      <button onClick={() => setProfileHeaderImage(null)} style={{ fontSize: '11px', padding: '6px 10px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', flexShrink: 0 }}>
+                        × 削除
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
-                  <ProfileAvatar config={avatarConfig} />
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '8px', letterSpacing: '0.8px' }}>アイコン</div>
+                  {/* プレビュー */}
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                    {iconType === 'photo' && profileIconImage
+                      ? <img src={profileIconImage} style={{ width: '72px', height: '72px', borderRadius: '50%', objectFit: 'cover', border: '3px solid rgba(255,255,255,0.2)' }} alt="icon" />
+                      : iconType === 'avatar' && selectedAvatarForIcon
+                        ? <img src={selectedAvatarForIcon} style={{ width: '72px', height: '72px', borderRadius: '50%', objectFit: 'cover', objectPosition: 'top', border: '3px solid rgba(255,255,255,0.2)' }} alt="icon" />
+                        : <ProfileAvatar config={avatarConfig} />
+                    }
+                  </div>
+                  {/* アイコン種類トグル */}
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                    {(['avatar', 'photo'] as const).map(type => (
+                      <button key={type} onClick={() => setIconType(type)} style={{
+                        flex: 1, padding: '8px', borderRadius: '10px', fontSize: '13px', cursor: 'pointer',
+                        background: iconType === type ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.06)',
+                        color: iconType === type ? '#c4b5fd' : 'rgba(255,255,255,0.5)',
+                        border: iconType === type ? '1px solid rgba(167,139,250,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                        fontWeight: iconType === type ? 600 : 400,
+                      }}>
+                        {type === 'avatar' ? '🧍 アバター' : '📷 写真'}
+                      </button>
+                    ))}
+                  </div>
+                  {/* アバター選択 */}
+                  {iconType === 'avatar' && (
+                    <div>
+                      {savedAvatars.length === 0 ? (
+                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', margin: 0, textAlign: 'center' }}>保存済みアバターがありません</p>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
+                          {savedAvatars.map(av => (
+                            <div key={av.id} onClick={() => setSelectedAvatarForIcon(av.imageUrl)} style={{
+                              flexShrink: 0, width: '56px', height: '80px', borderRadius: '10px', overflow: 'hidden', cursor: 'pointer',
+                              border: selectedAvatarForIcon === av.imageUrl ? '2px solid #a78bfa' : '2px solid rgba(255,255,255,0.1)',
+                            }}>
+                              <img src={av.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} alt="" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {selectedAvatarForIcon && (
+                        <button onClick={() => setSelectedAvatarForIcon(null)} style={{ marginTop: '8px', fontSize: '11px', padding: '4px 10px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}>
+                          × 選択解除
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {/* 写真アップロード */}
+                  {iconType === 'photo' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <button onClick={() => iconImageInputRef.current?.click()} style={{ padding: '9px', borderRadius: '10px', fontSize: '13px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer' }}>
+                        📷 画像をアップロード
+                      </button>
+                      <input ref={iconImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (file) setProfileIconImage(URL.createObjectURL(file))
+                      }} />
+                      {profileIconImage && (
+                        <button onClick={() => setProfileIconImage(null)} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}>
+                          × 写真を削除
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div style={{ marginBottom: '14px' }}>
                   <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginBottom: '6px', letterSpacing: '0.8px' }}>表示名</div>
@@ -2267,6 +3715,117 @@ const AvatarSVG = memo(function AvatarSVG({
     </div>
   )
 })
+
+// ── PeriodColorPicker ─────────────────────────────────────────────────────────
+const PERIOD_LABELS: Record<'morning' | 'afternoon' | 'evening' | 'night', string> = {
+  morning: '🌅 朝', afternoon: '🌤 昼', evening: '🌆 夕方', night: '🌙 夜',
+}
+const PERIOD_THEME_COLORS = [
+  ['#1a0000','#330000','#660000','#990000','#cc0000','#ff0000','#ff4d4d','#ff9999','#ffcccc','#fff0f0'],
+  ['#1a0d00','#331a00','#663300','#994d00','#cc6600','#ff8000','#ffaa4d','#ffcc99','#ffe5cc','#fff5e6'],
+  ['#1a1a00','#333300','#666600','#999900','#cccc00','#ffff00','#ffff4d','#ffff99','#ffffcc','#fffff0'],
+  ['#001a00','#003300','#006600','#009900','#00cc00','#00ff00','#4dff4d','#99ff99','#ccffcc','#f0fff0'],
+  ['#00001a','#000033','#000066','#000099','#0000cc','#0000ff','#4d4dff','#9999ff','#ccccff','#f0f0ff'],
+  ['#0d001a','#1a0033','#330066','#4d0099','#6600cc','#8000ff','#aa4dff','#cc99ff','#e5ccff','#f5e6ff'],
+  ['#0a0a0a','#1a1a1a','#333333','#4d4d4d','#666666','#808080','#999999','#b3b3b3','#cccccc','#e6e6e6'],
+  ['#ffffff','#f5f5f5','#ebebeb','#e0e0e0','#d6d6d6','#cccccc','#c2c2c2','#b8b8b8','#adadad','#a3a3a3'],
+]
+const PERIOD_STD_COLORS = ['#c00000','#ff0000','#ffc000','#ffff00','#92d050','#00b050','#00b0f0','#0070c0','#002060','#7030a0']
+
+function PeriodColorPicker({ label, colorKey, colors, setColors, hues, setHues, lightnesses, setLightnesses, openKey, setOpenKey, paletteKey, setPaletteKey, previewBg, previewMyBubble, previewOtherBubble, previewMyText, previewOtherText }: {
+  label: string
+  colorKey: 'morning' | 'afternoon' | 'evening' | 'night'
+  colors: Record<string, string>
+  setColors: (fn: (prev: Record<string, string>) => Record<string, string>) => void
+  hues: Record<string, number>
+  setHues: (fn: (prev: Record<string, number>) => Record<string, number>) => void
+  lightnesses: Record<string, number>
+  setLightnesses: (fn: (prev: Record<string, number>) => Record<string, number>) => void
+  openKey: string | null
+  setOpenKey: (k: string | null) => void
+  paletteKey: string | null
+  setPaletteKey: (k: string | null) => void
+  previewBg?: string
+  previewMyBubble?: string
+  previewOtherBubble?: string
+  previewMyText?: string
+  previewOtherText?: string
+}) {
+  const uid = `${label}-${colorKey}`
+  const currentColor = colors[colorKey] ?? '#ffffff'
+  const currentHue = hues[colorKey] ?? 0
+  const currentL = lightnesses[colorKey] ?? 50
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div onClick={() => setOpenKey(openKey === uid ? null : uid)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 16, height: 16, borderRadius: '50%', background: currentColor, border: '1px solid rgba(255,255,255,0.3)', flexShrink: 0 }} />
+          <span style={{ color: 'white', fontSize: 13 }}>{PERIOD_LABELS[colorKey]}</span>
+        </div>
+        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>{openKey === uid ? '▼' : '▶'}</span>
+      </div>
+      {openKey === uid && (
+        <div style={{ padding: '10px 8px', background: 'rgba(255,255,255,0.03)', borderRadius: '0 0 8px 8px' }}>
+          {/* プレビュー */}
+          {previewBg !== undefined && (
+            <div style={{ background: previewBg, borderRadius: 10, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', marginBottom: 10, border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ background: previewOtherBubble, borderRadius: 12, padding: '5px 10px' }}>
+                <span style={{ color: previewOtherText, fontSize: 12 }}>こんにちは</span>
+              </div>
+              <div style={{ background: previewMyBubble, borderRadius: 12, padding: '5px 10px' }}>
+                <span style={{ color: previewMyText, fontSize: 12 }}>よろしく！</span>
+              </div>
+            </div>
+          )}
+          {/* Hueスライダー */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: currentColor, flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)' }} />
+            <input type="range" min={0} max={360} value={currentHue} className="hue-slider"
+              style={{ flex: 1, pointerEvents: 'auto' }}
+              onChange={e => { const v = Number(e.target.value); setHues(p => ({ ...p, [colorKey]: v })); setColors(p => ({ ...p, [colorKey]: `hsl(${v},70%,${currentL}%)` })) }}
+              onInput={e => { const v = Number((e.target as HTMLInputElement).value); setHues(p => ({ ...p, [colorKey]: v })); setColors(p => ({ ...p, [colorKey]: `hsl(${v},70%,${currentL}%)` })) }}
+            />
+            <button onClick={() => setPaletteKey(paletteKey === uid ? null : uid)} style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', fontSize: 16 }}>🎨</button>
+          </div>
+          {/* 明度スライダー */}
+          <input type="range" min={10} max={90} value={currentL} className="hue-slider"
+            style={{ width: '100%', background: `linear-gradient(to right, hsl(${currentHue},70%,10%), hsl(${currentHue},70%,50%), hsl(${currentHue},70%,90%))`, pointerEvents: 'auto' }}
+            onChange={e => { const v = Number(e.target.value); setLightnesses(p => ({ ...p, [colorKey]: v })); setColors(p => ({ ...p, [colorKey]: `hsl(${currentHue},70%,${v}%)` })) }}
+            onInput={e => { const v = Number((e.target as HTMLInputElement).value); setLightnesses(p => ({ ...p, [colorKey]: v })); setColors(p => ({ ...p, [colorKey]: `hsl(${currentHue},70%,${v}%)` })) }}
+          />
+          {/* パレット */}
+          {paletteKey === uid && (
+            <>
+              <div onClick={() => setPaletteKey(null)} style={{ position: 'fixed', inset: 0, zIndex: 0 }} />
+              <div style={{ position: 'relative', zIndex: 1, marginTop: 8, background: 'rgba(20,20,40,0.97)', borderRadius: 10, padding: 8 }}>
+                <div style={{ display: 'flex', gap: 2, marginBottom: 6, flexWrap: 'wrap' }}>
+                  {PERIOD_THEME_COLORS.map((col, ci) => (
+                    <div key={ci} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {col.map((c, ri) => <button key={ri} onClick={() => setColors(p => ({ ...p, [colorKey]: c }))} style={{ width: 22, height: 16, borderRadius: 2, background: c, border: currentColor === c ? '2px solid white' : '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', padding: 0 }} />)}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {PERIOD_STD_COLORS.map(c => <button key={c} onClick={() => setColors(p => ({ ...p, [colorKey]: c }))} style={{ width: 22, height: 22, borderRadius: '50%', background: c, border: currentColor === c ? '2px solid white' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', padding: 0 }} />)}
+                </div>
+              </div>
+            </>
+          )}
+          {/* この時間帯をデフォルトに戻す */}
+          <button
+            onClick={() => {
+              const defaultColors = DEFAULT_PERIOD_CHAT_COLORS_CONST as Record<string, Record<string, string>>
+              const labelKey = label.replace(/-.*/, '')
+              const defaultColor = defaultColors[labelKey]?.[colorKey]
+              if (defaultColor) setColors(p => ({ ...p, [colorKey]: defaultColor }))
+            }}
+            style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', marginTop: 6 }}
+          >⟳ この時間帯をデフォルトに戻す</button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // color stored without # (DiceBear format)
 function ColorPickerIconButtonNoHash({ value, onChange }: { value: string; onChange: (c: string) => void }) {

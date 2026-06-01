@@ -2,6 +2,14 @@ import { create } from 'zustand'
 
 export type AppView = 'museum' | 'world' | 'explore'
 
+export type DoorCustom = {
+  doorColor: string
+  doorAccentColor: string
+  labelBgColor: string
+  labelTextColor: string
+  knobColor: string
+}
+
 type Post = {
   id: string
   text: string
@@ -24,6 +32,10 @@ type WorldStore = {
   setSelectedAvatarId: (id: number | null) => void
   subPageOpen: boolean
   setSubPageOpen: (open: boolean) => void
+  savedDoorMap: Record<string, DoorCustom>
+  setSavedDoor: (key: string, custom: DoorCustom) => void
+  sharedDoorMap: Record<string, DoorCustom>
+  setSharedDoor: (key: string, custom: DoorCustom) => void
 }
 
 export const useWorldStore = create<WorldStore>((set) => ({
@@ -40,4 +52,8 @@ export const useWorldStore = create<WorldStore>((set) => ({
   setSelectedAvatarId: (id) => set({ selectedAvatarId: id }),
   subPageOpen: false,
   setSubPageOpen: (open) => set({ subPageOpen: open }),
+  savedDoorMap: {},
+  setSavedDoor: (key, custom) => set((s) => ({ savedDoorMap: { ...s.savedDoorMap, [key]: custom } })),
+  sharedDoorMap: {},
+  setSharedDoor: (key, custom) => set((s) => ({ sharedDoorMap: { ...s.sharedDoorMap, [key]: custom } })),
 }))

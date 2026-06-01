@@ -51,6 +51,8 @@ body {
   -webkit-overflow-scrolling: touch;
   margin: 0;
   padding: 0;
+  position: fixed;
+  width: 100%;
 }
 
 #__next, [data-nextjs-root-layout] {
