@@ -442,7 +442,7 @@ export default function AvatarChat({
       </div>
 
       {/* ── 入力エリア ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'white', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'white', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0, paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
         {isRecording ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#fef2f2', borderRadius: 20 }}>

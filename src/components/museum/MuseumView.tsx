@@ -844,8 +844,6 @@ export function MuseumView() {
           <div
             className="flex-1 min-h-0 w-full overflow-hidden"
             style={{ touchAction: 'pan-y' }}
-            onPointerDown={onCarouselDown}
-            onPointerUp={onCarouselUp}
           >
             <div style={{
               display: 'flex', width: '300%', height: '100%',
@@ -910,7 +908,35 @@ export function MuseumView() {
             </div>
           </div>
 
-          <p style={{ textAlign: 'center', fontSize: `${titleFontSize}px`, color: titleColor, fontFamily: titleFont === 'serif' ? 'serif' : titleFont === 'mono' ? 'monospace' : 'sans-serif', padding: '6px 0 2px', letterSpacing: '0.05em', margin: 0 }}>{canvasTitle}</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '8px 16px' }}>
+            <button
+              onClick={() => { setSelectedItemId(null); setActiveCanvas(p => p - 1) }}
+              disabled={activeCanvas === 0}
+              style={{
+                width: '36px', height: '36px', borderRadius: '50%',
+                background: activeCanvas === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.18)',
+                border: 'none',
+                color: activeCanvas === 0 ? 'rgba(255,255,255,0.2)' : 'white',
+                fontSize: '20px', cursor: activeCanvas === 0 ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+            >‹</button>
+            <span style={{ color: 'white', fontSize: '14px', fontWeight: 600, minWidth: '80px', textAlign: 'center' }}>
+              {canvases[activeCanvas]?.title ?? '無題'}
+            </span>
+            <button
+              onClick={() => { setSelectedItemId(null); setActiveCanvas(p => p + 1) }}
+              disabled={activeCanvas >= 2}
+              style={{
+                width: '36px', height: '36px', borderRadius: '50%',
+                background: activeCanvas >= 2 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.18)',
+                border: 'none',
+                color: activeCanvas >= 2 ? 'rgba(255,255,255,0.2)' : 'white',
+                fontSize: '20px', cursor: activeCanvas >= 2 ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+            >›</button>
+          </div>
 
           <div className="flex justify-center gap-2 flex-shrink-0" style={{ paddingBottom: '100px', paddingTop: '8px' }}>
             {[0, 1, 2].map(i => (
@@ -2633,7 +2659,7 @@ export function MuseumView() {
           transform: 'translateX(-50%)',
           width: '100%',
           maxWidth: '390px',
-          height: '100dvh',
+          height: '100%',
           zIndex: 200,
           background: 'white',
           overflow: 'hidden',

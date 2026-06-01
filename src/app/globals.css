@@ -55,17 +55,11 @@ body {
   width: 100%;
 }
 
-#__next, [data-nextjs-root-layout] {
+#__next, [data-nextjs-root-layout], main {
   height: 100%;
   width: 100%;
   overflow: hidden;
   position: relative;
-}
-
-@supports (height: 100dvh) {
-  html, body {
-    height: 100dvh;
-  }
 }
 
 input:focus, textarea:focus {

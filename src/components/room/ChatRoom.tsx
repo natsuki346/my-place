@@ -978,7 +978,7 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
     return (
       <div
         className="flex flex-col"
-        style={{ height: '100dvh', background: t.bg, fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
+        style={{ height: '100%', background: t.bg, fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
       >
         {/* Header */}
         <header
@@ -1094,6 +1094,7 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
               borderTop: '1px solid rgba(255,255,255,0.06)',
               background: '#0d0d1a',
               display: 'flex', gap: '8px', alignItems: 'center',
+              paddingBottom: 'env(safe-area-inset-bottom)',
             }}>
               <input
                 value={input}
@@ -1714,7 +1715,7 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
   return (
     <div
       className="flex flex-col"
-      style={{ height: '100dvh', background: t.bg, fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
+      style={{ height: '100%', background: t.bg, fontFamily: 'system-ui, sans-serif', maxWidth: '390px', margin: '0 auto', position: 'relative' }}
     >
       <style>{`
         .hue-slider { -webkit-appearance:none; appearance:none; width:100%; height:12px; border-radius:6px; outline:none; cursor:pointer; background:linear-gradient(to right,hsl(0,80%,55%),hsl(45,80%,55%),hsl(90,80%,55%),hsl(135,80%,55%),hsl(180,80%,55%),hsl(225,80%,55%),hsl(270,80%,55%),hsl(315,80%,55%),hsl(360,80%,55%)); }
@@ -2002,7 +2003,7 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
                       )
                     })}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'white', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'white', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0, paddingBottom: 'env(safe-area-inset-bottom)' }}>
                     <input ref={fileInputChatRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelectChat} />
                     {isRecordingChat ? (
                       <div onClick={handleMicPressEndChat} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: '#fef2f2', borderRadius: 20, cursor: 'pointer' }}>
@@ -2073,7 +2074,7 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
                       )
                     })}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'white', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'white', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0, paddingBottom: 'env(safe-area-inset-bottom)' }}>
                     <input ref={fileInputChatRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelectChat} />
                     {isRecordingChat ? (
                       <div onClick={handleMicPressEndChat} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: '#fef2f2', borderRadius: 20, cursor: 'pointer' }}>
@@ -2171,7 +2172,7 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
 
       {/* Bottom: input */}
       {showBottom && (
-        <div className="flex-shrink-0" style={{ background: t.headerBg, borderTop: `1px solid ${t.border}` }}>
+        <div className="flex-shrink-0" style={{ background: t.headerBg, borderTop: `1px solid ${t.border}`, paddingBottom: 'env(safe-area-inset-bottom)' }}>
           {forceLocked && (
             <p style={{ fontSize: '11px', color: t.dimText, textAlign: 'center', padding: '6px 16px 0' }}>
               フォローすると投稿できます
@@ -2230,7 +2231,7 @@ export function ChatRoom({ roomKey: roomKeyProp, roomId, roomName, tagName: tagN
       {isSharedDoorEditOpen && (
         <div style={{
           position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)',
-          width: '100%', maxWidth: '390px', height: '100dvh',
+          width: '100%', maxWidth: '390px', height: '100%',
           zIndex: 300, overflow: 'hidden',
         }}>
           <DoorFullEditor
@@ -3017,7 +3018,7 @@ function CatchupModal({ items, t, onClose, onMarkAction }: {
             </div>
 
             {/* 返信入力欄 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'white', borderTop: `1px solid ${t.border}`, flexShrink: 0, position: 'relative', zIndex: 10101, pointerEvents: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'white', borderTop: `1px solid ${t.border}`, flexShrink: 0, position: 'relative', zIndex: 10101, pointerEvents: 'auto', paddingBottom: 'env(safe-area-inset-bottom)' }}>
               <input ref={catchUpFileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} />
               {replyText.length === 0 && (
                 <button onClick={() => setShowCatchUpActionSheet(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, display: 'flex', pointerEvents: 'auto' }}>
